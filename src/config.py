@@ -32,7 +32,7 @@ def load() -> dict:
 
 def db_url() -> str:
     """Susun connection string PostgreSQL dari .env."""
-    load_dotenv(ROOT / ".env")
+    load_dotenv(ROOT / ".env", override=True)
     user = os.getenv("DB_USER")
     pwd = os.getenv("DB_PASSWORD")
     host = os.getenv("DB_HOST", "localhost")

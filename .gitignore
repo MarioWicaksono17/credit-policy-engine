@@ -22,3 +22,6 @@ venv/
 .DS_Store
 .vscode/
 .idea/
+
+# Script pemeriksaan sementara
+cek_*.py
