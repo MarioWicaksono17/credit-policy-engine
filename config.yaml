@@ -1,0 +1,70 @@
+project: credit-policy-engine
+model_version: v1
+seed: 42
+
+data:
+  raw_path: data/raw/lending_club_loan_two.csv
+  # Default = charged off, yaitu pinjaman yang dihapusbukukan.
+  # Bukan definisi regulator (90 hari menunggak), dan horizonnya
+  # seumur pinjaman, bukan 12 bulan. Jadi ini BUKAN PD Basel.
+  default_label: "Charged Off"
+  non_default_label: "Fully Paid"
+
+split:
+  # Out-of-time, bukan acak. Model kredit dipakai ke depan,
+  # jadi validasinya harus ke periode yang belum pernah dilihat.
+  time_column: issue_year
+  train_max_year: 2013
+  validation_year: 2014
+  test_min_year: 2015
+  keep_random_benchmark: true
+
+features:
+  active_policy: application_only
+
+  # Model utama: hanya variabel yang tersedia SEBELUM keputusan kredit.
+  application_only:
+    exclude: [int_rate, installment, issue_year]
+
+  # Pembanding: dengan variabel harga. Selisih AUC-nya mengukur
+  # seberapa besar model bergantung pada keputusan Lending Club.
+  with_pricing:
+    exclude: [issue_year]
+
+  # Dibuang di semua kebijakan fitur.
+  always_exclude:
+    - grade
+    - sub_grade
+    - emp_title
+    - title
+    - address
+    - application_type
+    - loan_status
+
+  # Nilai sentinel, bukan data asli. Harus dianggap kosong.
+  sentinels:
+    dti: {max_valid: 100}
+    annual_inc: {min_valid: 1}
+
+  # mort_acc kosong di 9,5% baris. Kemungkinan informatif,
+  # jadi ditandai, bukan sekadar diisi median.
+  missing_indicators: [mort_acc]
+
+model:
+  champion: logistic_regression
+  challengers: [random_forest, gradient_boosting]
+  # Sengaja null. class_weight="balanced" menaikkan recall tapi
+  # merusak kalibrasi, sehingga output berhenti menjadi PD.
+  class_weight: null
+  # Imputasi dilakukan DI DALAM Pipeline, supaya median hanya
+  # dihitung dari data latih.
+  imputation: median
+
+policy:
+  cutoff: 0.20
+  lgd_assumption: 0.65
+  lgd_sensitivity: [0.45, 0.55, 0.65, 0.75, 0.85]
+  sweep:
+    start: 0.05
+    stop: 0.60
+    step: 0.01
