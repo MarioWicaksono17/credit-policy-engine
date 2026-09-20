@@ -22,7 +22,7 @@ import joblib
 from src import db
 from src.config import load
 from src.features import get_features, prepare, split_xy
-from src.metrics import evaluate
+from src.metrics import calibration_table, evaluate, vintage_table
 from src.model import build_pipeline
 from src.split import split_out_of_time, split_random
 
@@ -93,6 +93,22 @@ def main():
                 champion_pipe = pipe
                 champion_features = {"numeric": numeric, "categorical": categorical}
 
+                # Hitung dua tabel diagnosis, hanya untuk model utama.
+                # Model pembanding tidak perlu -- kita tidak akan memakainya.
+
+                # Ambil data uji dan hitung PD tiap pinjaman
+                X_test, y_test = split_xy(oot["oot_test"], numeric, categorical)
+                p_test = pipe.predict_proba(X_test)[:, 1]
+
+                diagnostics = {
+                    # Meleset merata atau tidak?
+                    "calibration_deciles": calibration_table(y_test, p_test),
+                    # Meleset makin parah seiring waktu atau tidak?
+                    "by_vintage": vintage_table(
+                        oot["oot_test"]["issue_year"], y_test, p_test
+                    ),
+                }
+
     # --- simpan artefak ---
     artifacts = root / "artifacts"
     artifacts.mkdir(exist_ok=True)
@@ -116,6 +132,7 @@ def main():
             "champion": champion,
             "split_sizes": {k: len(v) for k, v in {**oot, **rnd}.items()},
             "results": results,
+            "diagnostics": diagnostics,
         }, indent=2),
         encoding="utf-8",
     )
@@ -124,6 +141,20 @@ def main():
     print(f"\nChampion: {champion} pada {active}")
     print(f"  AUC {best['auc']}  KS {best['ks']}  Gini {best['gini']}")
     print(f"  Prediksi rata-rata {best['mean_predicted']} vs realisasi {best['actual_rate']}")
+
+    # Tampilkan tabel diagnosis di layar supaya bisa langsung dibaca
+    print("\nPerbandingan per tingkat risiko (10 kelompok, dari paling aman):")
+    print(f"  {'klp':>4} {'jumlah':>9} {'perkiraan':>11} {'kenyataan':>11} {'selisih':>10}")
+    for r in diagnostics["calibration_deciles"]:
+        print(f"  {r['decile']:>4} {r['n']:>9,} {r['mean_predicted']:>11.4f} "
+              f"{r['actual_rate']:>11.4f} {r['gap_pp']:>+9.2f} pp")
+
+    print("\nPerbandingan per tahun pencairan:")
+    print(f"  {'tahun':>5} {'jumlah':>9} {'perkiraan':>11} {'kenyataan':>11} {'selisih':>10}")
+    for r in diagnostics["by_vintage"]:
+        print(f"  {r['vintage']:>5} {r['n']:>9,} {r['predicted_defaults']:>11,} "
+              f"{r['actual_defaults']:>11,} {r['gap_pp']:>+9.2f} pp")
+
     print(f"\nArtefak tersimpan di artifacts/")
 
 
