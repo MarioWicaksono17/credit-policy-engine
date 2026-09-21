@@ -1,13 +1,13 @@
-"""Tahap 4: pilih garis batas dan hitung dampaknya.
+"""Tahap 4: pilih garis batas dan nilai dampaknya.
 
-Langkahnya:
-  1. Hitung PD tiap pinjaman di data uji
-  2. Hitung untung bersih tiap pinjaman kalau lunas
-  3. Untuk setiap garis batas 5%-60%, hitung untung dan risikonya
-  4. Pilih garis paling untung yang tidak melanggar batas risiko
+Dua data dipakai untuk dua tugas berbeda:
+  oot_val  (2014)   -- untuk MEMILIH garis batas
+  oot_test (2015+)  -- untuk MENILAI garis yang sudah dipilih
 
-Semua memakai data uji out-of-time -- data yang belum pernah dilihat
-model. Hasilnya tersimpan di artifacts/policy.json.
+Kenapa dipisah: kalau garis dipilih dan dinilai di data yang sama,
+hasilnya pasti terlihat bagus -- seperti membuat soal ujian sendiri
+lalu mengerjakannya. Data uji harus tetap belum tersentuh sampai
+keputusan selesai diambil.
 """
 import json
 import sys
@@ -21,12 +21,13 @@ import joblib
 from src import db
 from src.config import load
 from src.features import prepare, split_xy
-from src.policy import choose_cutoff, lgd_sensitivity, net_interest, sweep
+from src.policy import (choose_cutoff, evaluate_cutoff, lgd_sensitivity,
+                        net_interest, sweep)
 from src.split import split_out_of_time
 
 
 def juta(x):
-    """Format angka dolar menjadi juta, supaya mudah dibaca."""
+    """Format angka dolar menjadi juta supaya mudah dibaca."""
     return f"${x / 1e6:,.1f} jt"
 
 
@@ -34,100 +35,113 @@ def main():
     cfg = load()
     root = cfg["_root"]
     batas_risiko = cfg["policy"]["risk_appetite"]["max_portfolio_default_rate"]
+    lgd = cfg["policy"]["lgd_assumption"]
 
-    # --- 1. ambil model dan data uji ---
+    # --- ambil model ---
     model = joblib.load(root / "artifacts" / "model.pkl")
     meta = json.loads((root / "artifacts" / "feature_meta.json").read_text(encoding="utf-8"))
 
+    def hitung(frame):
+        """Hitung PD, kejadian nyata, besar pinjaman, dan pendapatan."""
+        X, y = split_xy(frame, meta["numeric"], meta["categorical"])
+        pd_scores = model.predict_proba(X)[:, 1]
+        ead = frame["loan_amnt"].astype(float)
+        revenue = net_interest(frame["installment"], frame["term_months"],
+                               frame["loan_amnt"], cfg["policy"]["net_margin"])
+        return pd_scores, y, ead, revenue
+
     print("Membaca data ...")
     df = prepare(db.read_table("silver_loans_clean"))
-    test = split_out_of_time(df, cfg)["oot_test"]
-    print(f"  data uji: {len(test):,} pinjaman")
+    bagian = split_out_of_time(df, cfg)
+    val, test = bagian["oot_val"], bagian["oot_test"]
+    print(f"  validasi (2014) : {len(val):,} pinjaman")
+    print(f"  uji (2015+)     : {len(test):,} pinjaman")
 
-    X, y = split_xy(test, meta["numeric"], meta["categorical"])
-    pd_scores = model.predict_proba(X)[:, 1]
-    ead = test["loan_amnt"].astype(float)
+    # ============================================================
+    # 1. PILIH garis batas -- hanya memakai data validasi
+    # ============================================================
+    print("\nMemilih garis batas di data validasi ...")
+    p_val, y_val, ead_val, rev_val = hitung(val)
+    tabel_val = sweep(p_val, y_val, ead_val, rev_val, cfg)
+    pilihan = choose_cutoff(tabel_val, batas_risiko)
+    garis = pilihan["terpilih"]["cutoff"]
 
-    # --- 2. untung bersih tiap pinjaman kalau lunas ---
-    # Suku bunga BOLEH dipakai di sini: ini menghitung hasil setelah
-    # pinjaman berjalan, bukan membantu model memutuskan.
-    revenue = net_interest(
-        test["installment"], test["term_months"], test["loan_amnt"],
-        cfg["policy"]["net_margin"],
-    )
+    # ============================================================
+    # 2. NILAI garis itu -- di data uji yang belum tersentuh
+    # ============================================================
+    print("Menilai garis terpilih di data uji ...")
+    p_test, y_test, ead_test, rev_test = hitung(test)
+    tabel_test = sweep(p_test, y_test, ead_test, rev_test, cfg)
+    hasil_uji = evaluate_cutoff(p_test, y_test, ead_test, rev_test, garis, lgd)
+    masih_aman = hasil_uji["default_rate"] <= batas_risiko
 
-    # --- 3. dampak setiap garis batas ---
-    print("Menghitung setiap garis batas ...")
-    tabel = sweep(pd_scores, y, ead, revenue, cfg)
-
-    # --- 4. pilih garis ---
-    pilihan = choose_cutoff(tabel, batas_risiko)
-    puncak, terpilih = pilihan["puncak"], pilihan["terpilih"]
-
-    sensitivitas = lgd_sensitivity(pd_scores, y, ead, revenue, terpilih["cutoff"], cfg)
+    sensitivitas = lgd_sensitivity(p_test, y_test, ead_test, rev_test, garis, cfg)
 
     # --- simpan ---
     (root / "artifacts" / "policy.json").write_text(
         json.dumps({
             "model_version": cfg["model_version"],
             "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "chosen_on": "oot_val",
             "evaluated_on": "oot_test",
             "n_total": len(test),
             "assumptions": {
-                "lgd": cfg["policy"]["lgd_assumption"],
+                "lgd": lgd,
                 "net_margin": cfg["policy"]["net_margin"],
                 "max_portfolio_default_rate": batas_risiko,
             },
-            "economic_optimum": puncak,
-            "chosen": terpilih,
+            "chosen_cutoff": garis,
             "scenario": pilihan["skenario"],
-            "sweep": tabel,
+            "selection": {
+                "economic_optimum": pilihan["puncak"],
+                "chosen": pilihan["terpilih"],
+            },
+            "active": hasil_uji,
+            "holds_on_test": masih_aman,
+            "sweep": tabel_test,
             "lgd_sensitivity": sensitivitas,
         }, indent=2),
         encoding="utf-8",
     )
 
     # --- tampilkan ---
-    print(f"\n{'garis':>6} {'disetujui':>10} {'default':>9} {'uang masuk':>13} "
-          f"{'uang keluar':>13} {'untung bersih':>14}  {'aman?':>6}")
-    for r in tabel:
-        if round(r["cutoff"], 2) in (0.10, 0.12, 0.14, 0.16, 0.18, 0.20,
-                                     0.25, 0.30, 0.35, 0.40, 0.50):
-            aman = "ya" if r["default_rate"] and r["default_rate"] <= batas_risiko else "tidak"
-            print(f"{r['cutoff']:>6.0%} {r['approval_rate']:>10.1%} {r['default_rate']:>9.1%} "
-                  f"{juta(r['income']):>13} {juta(r['realized_loss']):>13} "
-                  f"{juta(r['net_profit']):>14}  {aman:>6}")
+    puncak, terpilih = pilihan["puncak"], pilihan["terpilih"]
 
-    print("\n" + "=" * 60)
-    print(f"Puncak untung   : garis {puncak['cutoff']:.0%}"
-          f"   untung {juta(puncak['net_profit'])}"
+    print("\n" + "=" * 62)
+    print("DIPILIH DI DATA VALIDASI (2014)")
+    print(f"  Puncak untung   : garis {puncak['cutoff']:.0%}"
+          f"   kontribusi {juta(puncak['net_profit'])}"
           f"   default {puncak['default_rate']:.1%}")
-    print(f"Batas risiko    : default rate maksimal {batas_risiko:.0%}")
-    print(f"GARIS TERPILIH  : garis {terpilih['cutoff']:.0%}"
-          f"   untung {juta(terpilih['net_profit'])}"
+    print(f"  Batas risiko    : default rate maksimal {batas_risiko:.0%}")
+    print(f"  Garis terpilih  : garis {terpilih['cutoff']:.0%}"
+          f"   kontribusi {juta(terpilih['net_profit'])}"
           f"   default {terpilih['default_rate']:.1%}")
-    print("=" * 60)
+    print(f"  Skenario        : KEMUNGKINAN {pilihan['skenario']}")
 
-    if pilihan["skenario"] == 1:
-        print("\nKEMUNGKINAN 1 -- batas risiko yang menentukan.")
-        print("Garis paling untung melanggar batas risiko, jadi dipilih")
-        print("garis paling untung yang masih aman.")
-        selisih = puncak["net_profit"] - terpilih["net_profit"]
-        print(f"Harga dari kehati-hatian ini: {juta(selisih)} untung yang dilepas.")
-    else:
-        print("\nKEMUNGKINAN 2 -- untung yang menentukan.")
-        print("Garis paling untung sudah aman, jadi itulah yang dipakai.")
+    print("\nDINILAI DI DATA UJI (2015+) -- belum pernah dilihat")
+    print(f"  Garis {garis:.0%}")
+    print(f"  Disetujui              {hasil_uji['n_approved']:>8,}  ({hasil_uji['approval_rate']:.1%})")
+    print(f"  Default rate           {hasil_uji['default_rate']:>8.1%}")
+    print(f"  Kontribusi kredit      {juta(hasil_uji['net_profit']):>12}")
+    print(f"  Masih di bawah {batas_risiko:.0%}?     {'YA' if masih_aman else 'TIDAK'}")
+    print("=" * 62)
 
-    print(f"\nPada garis terpilih:")
-    print(f"  Disetujui              {terpilih['n_approved']:>8,}  ({terpilih['approval_rate']:.1%})")
-    print(f"  Disetujui, lunas       {terpilih['approved_good']:>8,}")
-    print(f"  Disetujui, gagal bayar {terpilih['approved_bad']:>8,}")
-    print(f"  Ditolak, akan lunas    {terpilih['rejected_good']:>8,}   <- biaya tersembunyi")
-    print(f"  Ditolak, memang gagal  {terpilih['rejected_bad']:>8,}")
+    if not masih_aman:
+        print("\nPERHATIAN: kebijakan yang dirancang di data 2014 tidak lagi")
+        print("memenuhi batas risiko di data 2015+. Populasi peminjam")
+        print("bergeser, dan kebijakan perlu ditinjau ulang.")
 
-    print(f"\nKalau asumsi LGD diganti (pada garis {terpilih['cutoff']:.0%}):")
+    print(f"\nEmpat kotak hasil di data uji:")
+    print(f"  Disetujui, lunas       {hasil_uji['approved_good']:>8,}")
+    print(f"  Disetujui, gagal bayar {hasil_uji['approved_bad']:>8,}")
+    print(f"  Ditolak, akan lunas    {hasil_uji['rejected_good']:>8,}   <- biaya tersembunyi")
+    print(f"  Ditolak, memang gagal  {hasil_uji['rejected_bad']:>8,}")
+    print(f"  {hasil_uji['good_rejected_per_bad_avoided']} pemohon baik ditolak"
+          f" untuk setiap 1 gagal bayar yang dihindari")
+
+    print(f"\nKalau asumsi LGD diganti (garis {garis:.0%}, data uji):")
     for r in sensitivitas:
-        print(f"  LGD {r['lgd']:.0%}  ->  untung bersih {juta(r['net_profit'])}")
+        print(f"  LGD {r['lgd']:.0%}  ->  kontribusi {juta(r['net_profit'])}")
 
     print(f"\nTersimpan di artifacts/policy.json")
 

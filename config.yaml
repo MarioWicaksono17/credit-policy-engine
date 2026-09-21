@@ -74,10 +74,19 @@ policy:
   lgd_assumption: 0.65
   lgd_sensitivity: [0.45, 0.55, 0.65, 0.75, 0.85]
 
-  # Dari seluruh bunga yang masuk, berapa persen yang jadi untung bersih.
-  # Sisanya habis untuk biaya dana (bunga ke penabung) dan operasional.
-  # ASUMSI -- dipakai untuk ilustrasi, bukan angka bank sungguhan.
-  net_margin: 0.45
+  # Dari bunga yang diterima, berapa persen dihitung sebagai untung.
+  #
+  # Diset 1.0, artinya yang dihitung adalah KONTRIBUSI KREDIT:
+  # bunga yang masuk dikurangi pokok yang hilang, SEBELUM biaya dana
+  # dan biaya operasional.
+  #
+  # Kenapa biaya dana dan operasional tidak dihitung: keduanya tidak
+  # bisa diestimasi dari dataset ini, dan besarnya bergantung pada
+  # struktur lembaga pemberi pinjaman -- bukan pada keputusan kredit.
+  #
+  # Versi sebelumnya memakai 0.45 tanpa dasar yang kuat, dan hasilnya
+  # tidak masuk akal: garis optimal 8%, menolak 87% pemohon.
+  net_margin: 1.0
 
   sweep:
     start: 0.05
