@@ -1,146 +1,168 @@
 """Kebijakan kredit: mengubah angka PD menjadi keputusan.
 
-Model menghasilkan PD. PD itu sendiri belum keputusan -- baru jadi
-keputusan setelah kita menarik garis batas.
+Model menghasilkan PD. PD belum keputusan -- baru jadi keputusan
+setelah kita menarik garis batas.
 
-Menarik garis adalah keputusan bisnis, bukan keputusan statistik.
-Karena itu file ini terpisah dari model.py: di bank pun, tim yang
-membangun model dan tim yang menetapkan kebijakan kredit adalah
-tim yang berbeda.
+Garis batas dipilih dengan dua pertimbangan:
+  1. Untung  -- garis mana yang menghasilkan untung bersih terbesar
+  2. Risiko  -- garis mana yang masih memenuhi batas risiko
+
+Yang dipilih: garis paling untung di antara garis yang memenuhi
+batas risiko. Seperti memilih makanan paling enak, asal harganya
+tidak melebihi uang saku.
 """
 import numpy as np
-import pandas as pd
 
 
 def decide(pd_scores, cutoff: float) -> np.ndarray:
-    """Terapkan garis batas. True artinya disetujui.
-
-    pd_scores = angka PD tiap pinjaman
-    cutoff    = garis batas, misalnya 0.20
-    """
+    """Terapkan garis batas. True artinya disetujui."""
     return np.asarray(pd_scores, dtype=float) < cutoff
 
 
-def outcome_counts(pd_scores, y_true, cutoff: float) -> dict:
-    """Bagi seluruh pinjaman ke empat kotak hasil.
+def net_interest(installment, term_months, loan_amnt, net_margin: float) -> np.ndarray:
+    """Untung bersih bank dari satu pinjaman, KALAU pinjaman itu lunas.
 
-    Empat kotak itu:
-      approved_good   disetujui, ternyata lunas      -> untung
-      approved_bad    disetujui, ternyata gagal      -> rugi
-      rejected_good   ditolak, padahal akan lunas    -> peluang hilang
-      rejected_bad    ditolak, memang gagal          -> kerugian dicegah
+    Total bunga = angsuran per bulan x jumlah bulan - pokok pinjaman.
+    Tidak semuanya jadi untung: sebagian habis untuk biaya dana dan
+    operasional. net_margin adalah bagian yang tersisa.
 
-    Kotak ketiga adalah biaya yang tidak pernah muncul di laporan
-    keuangan mana pun, karena uangnya memang tidak pernah dipinjamkan.
+    Catatan kejujuran: ini perkiraan tertinggi. Pinjaman yang dilunasi
+    lebih cepat membayar bunga lebih sedikit, dan dataset tidak
+    mencatat kapan pelunasan terjadi.
     """
-    approved = decide(pd_scores, cutoff)
-    bad = np.asarray(y_true).astype(bool)
+    angsuran = np.asarray(installment, dtype=float)
+    bulan = np.asarray(term_months, dtype=float)
+    pokok = np.asarray(loan_amnt, dtype=float)
 
-    return {
-        "approved_good": int((approved & ~bad).sum()),
-        "approved_bad": int((approved & bad).sum()),
-        "rejected_good": int((~approved & ~bad).sum()),
-        "rejected_bad": int((~approved & bad).sum()),
-    }
+    total_bunga = angsuran * bulan - pokok
+    return total_bunga * net_margin
 
 
-def expected_loss(pd_scores, ead, lgd: float, mask=None) -> float:
-    """Hitung perkiraan kerugian: PD x LGD x EAD, dijumlahkan.
+def evaluate_cutoff(pd_scores, y_true, ead, revenue, cutoff: float, lgd: float) -> dict:
+    """Hitung seluruh dampak dari satu garis batas.
 
-    pd_scores = angka PD tiap pinjaman
-    ead       = besar pinjaman (loan_amnt)
-    lgd       = porsi yang hilang bila gagal bayar, ASUMSI
-    mask      = pilih sebagian pinjaman saja, misalnya yang disetujui
+    pd_scores = PD tiap pinjaman, dari model
+    y_true    = kejadian sebenarnya (1 = gagal bayar, 0 = lunas)
+    ead       = besar pinjaman
+    revenue   = untung bersih tiap pinjaman kalau lunas
+    cutoff    = garis batas yang dinilai
+    lgd       = porsi yang hilang bila gagal bayar
     """
     p = np.asarray(pd_scores, dtype=float)
+    gagal = np.asarray(y_true).astype(bool)
     e = np.asarray(ead, dtype=float)
+    r = np.asarray(revenue, dtype=float)
 
-    if mask is not None:
-        p, e = p[mask], e[mask]
+    disetujui = decide(p, cutoff)
 
-    return float((p * e * lgd).sum())
+    # Empat kotak hasil
+    setuju_lunas = disetujui & ~gagal
+    setuju_gagal = disetujui & gagal
+    tolak_lunas = ~disetujui & ~gagal
+    tolak_gagal = ~disetujui & gagal
 
+    n_setuju = int(disetujui.sum())
 
-def evaluate_cutoff(pd_scores, y_true, ead, cutoff: float, lgd: float) -> dict:
-    """Hitung seluruh dampak dari satu garis batas."""
-    p = np.asarray(pd_scores, dtype=float)
-    y = np.asarray(y_true).astype(int)
-    e = np.asarray(ead, dtype=float)
-
-    approved = decide(p, cutoff)
-    counts = outcome_counts(p, y, cutoff)
-
-    n_approved = int(approved.sum())
-    n_total = len(p)
-
-    # Kalau batasnya sangat ketat, bisa saja tidak ada yang disetujui.
-    # Pembagian dengan nol harus dicegah.
-    if n_approved == 0:
+    # Kalau tidak ada yang disetujui, tidak ada yang bisa dihitung
+    if n_setuju == 0:
         return {
-            "cutoff": round(cutoff, 4),
-            "approval_rate": 0.0,
-            "n_approved": 0,
-            "exposure": 0.0,
-            "default_rate": None,
-            "expected_loss": 0.0,
-            "el_pct_exposure": None,
-            **counts,
+            "cutoff": round(cutoff, 4), "approval_rate": 0.0, "n_approved": 0,
+            "exposure": 0.0, "default_rate": None,
+            "expected_loss": 0.0, "el_pct_exposure": None,
+            "income": 0.0, "realized_loss": 0.0, "net_profit": 0.0,
+            "approved_good": 0, "approved_bad": 0,
+            "rejected_good": int(tolak_lunas.sum()),
+            "rejected_bad": int(tolak_gagal.sum()),
             "good_rejected_per_bad_avoided": None,
         }
 
-    exposure = float(e[approved].sum())
-    el = expected_loss(p, e, lgd, mask=approved)
+    exposure = float(e[disetujui].sum())
 
-    # Berapa pemohon baik yang ikut tertolak untuk setiap satu
-    # gagal bayar yang berhasil dihindari. Inilah harga dari
-    # memperketat batas.
-    rasio = (counts["rejected_good"] / counts["rejected_bad"]
-             if counts["rejected_bad"] > 0 else None)
+    # Perkiraan kerugian dari model (PD x LGD x EAD). Dilaporkan karena
+    # ini metrik standar, tapi TIDAK dipakai memilih garis -- kita tahu
+    # PD model meleset.
+    expected_loss = float((p[disetujui] * e[disetujui] * lgd).sum())
+
+    # Uang yang benar-benar masuk dan keluar, dari kejadian sebenarnya
+    uang_masuk = float(r[setuju_lunas].sum())
+    uang_keluar = float((e[setuju_gagal] * lgd).sum())
+    untung_bersih = uang_masuk - uang_keluar
+
+    n_tolak_gagal = int(tolak_gagal.sum())
+    rasio = int(tolak_lunas.sum()) / n_tolak_gagal if n_tolak_gagal > 0 else None
 
     return {
         "cutoff": round(cutoff, 4),
-        "approval_rate": round(n_approved / n_total, 4),
-        "n_approved": n_approved,
+        "approval_rate": round(n_setuju / len(p), 4),
+        "n_approved": n_setuju,
         "exposure": round(exposure, 2),
-        "default_rate": round(float(y[approved].mean()), 4),
-        "expected_loss": round(el, 2),
-        "el_pct_exposure": round(el / exposure, 4),
-        **counts,
+        "default_rate": round(float(gagal[disetujui].mean()), 4),
+        "expected_loss": round(expected_loss, 2),
+        "el_pct_exposure": round(expected_loss / exposure, 4),
+        "income": round(uang_masuk, 2),
+        "realized_loss": round(uang_keluar, 2),
+        "net_profit": round(untung_bersih, 2),
+        "approved_good": int(setuju_lunas.sum()),
+        "approved_bad": int(setuju_gagal.sum()),
+        "rejected_good": int(tolak_lunas.sum()),
+        "rejected_bad": n_tolak_gagal,
         "good_rejected_per_bad_avoided": round(rasio, 2) if rasio else None,
     }
 
 
-def sweep(pd_scores, y_true, ead, cfg: dict, lgd: float = None) -> list:
-    """Hitung dampak untuk SEMUA garis batas yang mungkin.
+def sweep(pd_scores, y_true, ead, revenue, cfg: dict) -> list:
+    """Hitung dampak untuk SEMUA garis batas, dari 5% sampai 60%.
 
-    Hasilnya ini yang dipakai slider di halaman Kebijakan kredit.
-    Seluruh tabel dihitung sekali di sini, lalu diunduh browser
-    sekaligus -- supaya menggeser slider terasa seketika dan tidak
-    perlu bolak-balik ke server.
+    Hasilnya dipakai slider di aplikasi. Dihitung sekali di sini,
+    lalu diunduh browser sekaligus -- jadi menggeser slider terasa
+    seketika tanpa bolak-balik ke server.
     """
     s = cfg["policy"]["sweep"]
-    lgd = lgd if lgd is not None else cfg["policy"]["lgd_assumption"]
+    lgd = cfg["policy"]["lgd_assumption"]
 
-    cutoffs = np.arange(s["start"], s["stop"] + s["step"] / 2, s["step"])
-    return [evaluate_cutoff(pd_scores, y_true, ead, float(c), lgd) for c in cutoffs]
+    garis = np.arange(s["start"], s["stop"] + s["step"] / 2, s["step"])
+    return [evaluate_cutoff(pd_scores, y_true, ead, revenue, float(c), lgd) for c in garis]
 
 
-def lgd_sensitivity(pd_scores, y_true, ead, cfg: dict) -> list:
-    """Uji seberapa berubah kesimpulan bila asumsi LGD diganti.
+def choose_cutoff(tabel: list, max_default_rate: float) -> dict:
+    """Pilih garis batas: paling untung di antara yang aman.
 
-    LGD tidak bisa dihitung dari dataset ini karena tidak ada catatan
-    penagihan setelah gagal bayar. Karena itu nilainya diuji pada
-    beberapa kemungkinan, bukan dipakai satu angka seolah pasti.
+    Mengembalikan tiga hal:
+      puncak    garis paling untung, tanpa peduli risiko
+      terpilih  garis paling untung yang memenuhi batas risiko
+      skenario  1 = batas risiko yang menentukan
+                2 = untung yang menentukan
     """
-    cutoff = cfg["policy"]["cutoff"]
-    hasil = []
+    ada_isi = [r for r in tabel if r["n_approved"] > 0]
+    aman = [r for r in ada_isi if r["default_rate"] <= max_default_rate]
 
+    if not aman:
+        raise ValueError(
+            f"Tidak ada garis batas yang memenuhi default rate <= {max_default_rate:.0%}. "
+            f"Longgarkan batas risiko di config.yaml."
+        )
+
+    puncak = max(ada_isi, key=lambda r: r["net_profit"])
+    terpilih = max(aman, key=lambda r: r["net_profit"])
+
+    # Kalau puncaknya melanggar batas, batas risiko yang menentukan.
+    skenario = 1 if puncak["default_rate"] > max_default_rate else 2
+
+    return {"puncak": puncak, "terpilih": terpilih, "skenario": skenario}
+
+
+def lgd_sensitivity(pd_scores, y_true, ead, revenue, cutoff: float, cfg: dict) -> list:
+    """Uji seberapa berubah untung bila asumsi LGD diganti.
+
+    LGD tidak bisa dihitung dari dataset ini, jadi diuji pada
+    beberapa kemungkinan -- bukan dipakai satu angka seolah pasti.
+    """
+    hasil = []
     for lgd in cfg["policy"]["lgd_sensitivity"]:
-        r = evaluate_cutoff(pd_scores, y_true, ead, cutoff, lgd)
+        r = evaluate_cutoff(pd_scores, y_true, ead, revenue, cutoff, lgd)
         hasil.append({
             "lgd": lgd,
-            "expected_loss": r["expected_loss"],
-            "el_pct_exposure": r["el_pct_exposure"],
+            "realized_loss": r["realized_loss"],
+            "net_profit": r["net_profit"],
         })
-
     return hasil

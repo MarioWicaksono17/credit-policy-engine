@@ -61,9 +61,24 @@ model:
   imputation: median
 
 policy:
-  cutoff: 0.20
+  # Garis batas TIDAK ditulis di sini. Yang ditulis adalah aturannya,
+  # lalu program mencari garis paling untung yang memenuhi aturan itu.
+  risk_appetite:
+    # Dari semua pinjaman yang disetujui, maksimal 15 dari 100 boleh
+    # gagal bayar. Ini keputusan bisnis, bukan hasil perhitungan --
+    # di bank, angka ini ditetapkan oleh direksi.
+    max_portfolio_default_rate: 0.15
+
+  # Kalau gagal bayar, berapa persen pinjaman yang benar-benar hilang.
+  # ASUMSI -- dataset tidak punya catatan penagihan setelah gagal bayar.
   lgd_assumption: 0.65
   lgd_sensitivity: [0.45, 0.55, 0.65, 0.75, 0.85]
+
+  # Dari seluruh bunga yang masuk, berapa persen yang jadi untung bersih.
+  # Sisanya habis untuk biaya dana (bunga ke penabung) dan operasional.
+  # ASUMSI -- dipakai untuk ilustrasi, bukan angka bank sungguhan.
+  net_margin: 0.45
+
   sweep:
     start: 0.05
     stop: 0.60

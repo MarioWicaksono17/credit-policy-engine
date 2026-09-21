@@ -7,7 +7,7 @@ print("=" * 50)
 
 cfg = load()
 print("Project      :", cfg["project"])
-print("Cutoff PD    :", cfg["policy"]["cutoff"])
+print("Batas risiko :", cfg["policy"]["risk_appetite"]["max_portfolio_default_rate"])
 print("LGD          :", cfg["policy"]["lgd_assumption"])
 print("Dikeluarkan  :", cfg["features"]["application_only"]["exclude"])
 print("Split        : latih <=", cfg["split"]["train_max_year"],
