@@ -1,30 +1,51 @@
-"""Cek apakah Langkah 0 sudah benar. Jalankan dengan tombol Run di VS Code."""
+"""Cek apakah persiapan versi 2 sudah benar. Jalankan dengan tombol Run."""
 import pandas as pd
-from src.config import load, db_url
 from sqlalchemy import create_engine, text
 
-print("=" * 50)
+from src.config import all_features, db_url, load
 
-cfg = load()
-print("Project      :", cfg["project"])
-print("Batas risiko :", cfg["policy"]["risk_appetite"]["max_portfolio_default_rate"])
-print("LGD          :", cfg["policy"]["lgd_assumption"])
-print("Dikeluarkan  :", cfg["features"]["application_only"]["exclude"])
-print("Split        : latih <=", cfg["split"]["train_max_year"],
-      "| uji >=", cfg["split"]["test_min_year"])
+print("=" * 60)
 
-print("-" * 50)
+# ---- 1. config
+cfg = load()   # sekaligus memeriksa kebocoran fitur
+fitur = all_features(cfg)
+f = cfg["columns"]["features"]
+print("Project        :", cfg["project"], cfg["model_version"])
+print("Penyaring      : tenor", cfg["filters"]["term_months"], "bulan,",
+      cfg["filters"]["application_type"])
+print("Pembagian      : latih", cfg["split"]["train_years"],
+      "| validasi", cfg["split"]["validation_years"],
+      "| uji", cfg["split"]["test_years"])
+print(f"Fitur          : {len(fitur)} "
+      f"({len(f['application'])} formulir + {len(f['credit_history'])} riwayat "
+      f"+ {len(f['bureau_detail'])} biro)")
+print("Batas risiko   :", cfg["policy"]["risk_appetite"]["max_portfolio_default_rate"])
+print("Kebocoran      : tidak ada")
 
-df = pd.read_csv(cfg["data"]["raw_path"])
-print("Ukuran data  :", df.shape)
-print(df["loan_status"].value_counts())
+# ---- 2. dataset: hanya membaca baris judul, bukan seluruh file
+print("-" * 60)
+path = cfg["_root"] / cfg["data"]["raw_path"]
+if not path.exists():
+    raise SystemExit(f"Dataset tidak ditemukan: {path}")
 
-print("-" * 50)
+header = set(pd.read_csv(path, nrows=0).columns)
+c = cfg["columns"]
+dibutuhkan = (fitur + c["benchmark"] + c["outcome"] + c["filter_columns"]
+              + [c["id"], c["time"]])
+hilang = [x for x in dibutuhkan if x not in header]
+if hilang:
+    raise SystemExit(f"Kolom tidak ada di dataset: {hilang}")
+print(f"Dataset        : {path.name}")
+print(f"Kolom          : {len(dibutuhkan)} dibutuhkan, semua ada")
 
+# ---- 3. database
+print("-" * 60)
 engine = create_engine(db_url())
 with engine.connect() as conn:
-    v = conn.execute(text("SELECT version()")).scalar()
-print("Database OK  :", v.split(",")[0])
+    nama = conn.execute(text("SELECT current_database()")).scalar()
+if nama != "credit_policy":
+    raise SystemExit(f"SALAH DATABASE: terhubung ke '{nama}', seharusnya 'credit_policy'")
+print("Database       :", nama)
 
-print("=" * 50)
-print("Langkah 0 selesai.")
+print("=" * 60)
+print("Persiapan versi 2 selesai.")

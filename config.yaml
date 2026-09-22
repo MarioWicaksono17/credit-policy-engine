@@ -1,94 +1,254 @@
+# =====================================================================
+# Credit Policy Engine -- konfigurasi
+#
+# Semua keputusan dan asumsi project ada di file ini. Kode tidak boleh
+# menulis angka-angka ini sendiri. Alasan lengkap setiap kolom ada di
+# docs/keputusan_kolom.md.
+# =====================================================================
+
 project: credit-policy-engine
-model_version: v1
+
+# v1 = dataset ringkas 27 kolom (sudah diarsipkan di tag v1)
+# v2 = dataset lengkap Lending Club
+model_version: v2
 seed: 42
 
 data:
-  raw_path: data/raw/lending_club_loan_two.csv
-  # Default = charged off, yaitu pinjaman yang dihapusbukukan.
-  # Bukan definisi regulator (90 hari menunggak), dan horizonnya
-  # seumur pinjaman, bukan 12 bulan. Jadi ini BUKAN PD Basel.
-  default_label: "Charged Off"
-  non_default_label: "Fully Paid"
+  raw_path: data/raw/accepted_2007_to_2018Q4.csv
 
+  # Definisi gagal bayar: pinjaman dihapusbukukan (charged off).
+  # Di Lending Club ini terjadi setelah menunggak 120 hari atau lebih,
+  # sekitar satu bulan setelah batas kolektibilitas 3 OJK (90 hari).
+  # Horizonnya seumur pinjaman, bukan 12 bulan.
+  default_labels:
+    - "Charged Off"
+    - "Does not meet the credit policy. Status:Charged Off"
+  non_default_labels:
+    - "Fully Paid"
+    - "Does not meet the credit policy. Status:Fully Paid"
+
+# ---------------------------------------------------------------------
+# PENYARING -- menentukan pinjaman mana yang boleh masuk data.
+# Dipakai sekali di awal, sebelum model melihat apa pun.
+# ---------------------------------------------------------------------
+filters:
+  # Hanya pinjaman yang sudah selesai. Status lain (Current, Late,
+  # In Grace Period, Default) belum ketahuan hasil akhirnya.
+  completed_only: true
+
+  # Pengajuan bersama punya kolom yang berbeda, dan hanya 5% data.
+  application_type: Individual
+
+  # Pinjaman 60 bulan dari 2014-2015 baru 67-83% selesai saat data
+  # diambil. Yang sudah selesai didominasi gagal bayar awal, sehingga
+  # default rate-nya terlihat sekitar 6 poin lebih tinggi dari
+  # kenyataan. Pinjaman 36 bulan dari 2013-2015 sudah 100% selesai.
+  term_months: 36
+
+# ---------------------------------------------------------------------
+# PEMBAGIAN DATA -- berdasarkan tahun pencairan, bukan acak
+# ---------------------------------------------------------------------
 split:
-  # Out-of-time, bukan acak. Model kredit dipakai ke depan,
-  # jadi validasinya harus ke periode yang belum pernah dilihat.
   time_column: issue_year
-  train_max_year: 2013
-  validation_year: 2014
-  test_min_year: 2015
+
+  # Latih hanya dengan 2013, karena 36 kolom biro kredit baru lengkap
+  # mulai tahun itu. Bank juga melatih scorecard dari pengajuan periode
+  # terbaru, bukan data bertahun-tahun ke belakang.
+  train_years: [2013]
+
+  # Untuk MEMILIH: membandingkan model dan menarik garis batas.
+  validation_years: [2014]
+
+  # Untuk MENILAI hasil akhir. Hanya disentuh sekali.
+  test_years: [2015]
+
+  # 2016-2018 tidak dipakai: hanya 11-67% pinjamannya sudah selesai.
+
+  # Pembagian acak tetap dihitung, hanya sebagai pembanding.
   keep_random_benchmark: true
 
-features:
-  active_policy: application_only
+# ---------------------------------------------------------------------
+# KOLOM
+# ---------------------------------------------------------------------
+columns:
+  id: id
+  time: issue_d
 
-  # Model utama: hanya variabel yang tersedia SEBELUM keputusan kredit.
-  application_only:
-    exclude: [int_rate, installment, issue_year]
+  # FITUR -- informasi yang tersedia SEBELUM keputusan kredit diambil.
+  # Acuan: sheet browseNotes di kamus kolom Lending Club, yaitu daftar
+  # informasi yang ditampilkan kepada investor sebelum pendanaan.
+  features:
+    # Dari formulir pengajuan (7)
+    application:
+      - loan_amnt
+      - emp_length
+      - home_ownership
+      - annual_inc
+      - verification_status
+      - purpose
+      - dti
 
-  # Pembanding: dengan variabel harga. Selisih AUC-nya mengukur
-  # seberapa besar model bergantung pada keputusan Lending Club.
-  with_pricing:
-    exclude: [issue_year]
+    # Riwayat kredit dasar (19)
+    credit_history:
+      - fico_range_low           # FICO SAAT PENGAJUAN -- bukan last_fico_range_*
+      - fico_range_high
+      - earliest_cr_line
+      - delinq_2yrs
+      - inq_last_6mths
+      - mths_since_last_delinq
+      - mths_since_last_record
+      - open_acc
+      - pub_rec
+      - revol_bal
+      - revol_util
+      - total_acc
+      - mort_acc
+      - pub_rec_bankruptcies
+      - collections_12_mths_ex_med
+      - acc_now_delinq
+      - chargeoff_within_12_mths # kredit di tempat LAIN, sebelum pengajuan
+      - delinq_amnt
+      - tax_liens
 
-  # Dibuang di semua kebijakan fitur.
-  always_exclude:
+    # Rincian biro kredit, lengkap mulai 2013 (36)
+    bureau_detail:
+      - mths_since_last_major_derog
+      - tot_coll_amt
+      - tot_cur_bal
+      - total_rev_hi_lim
+      - acc_open_past_24mths
+      - avg_cur_bal
+      - bc_open_to_buy
+      - bc_util
+      - mo_sin_old_il_acct
+      - mo_sin_old_rev_tl_op
+      - mo_sin_rcnt_rev_tl_op
+      - mo_sin_rcnt_tl
+      - mths_since_recent_bc
+      - mths_since_recent_bc_dlq
+      - mths_since_recent_inq
+      - mths_since_recent_revol_delinq
+      - num_accts_ever_120_pd
+      - num_actv_bc_tl
+      - num_actv_rev_tl
+      - num_bc_sats
+      - num_bc_tl
+      - num_il_tl
+      - num_op_rev_tl
+      - num_rev_accts
+      - num_rev_tl_bal_gt_0
+      - num_sats
+      - num_tl_120dpd_2m
+      - num_tl_30dpd
+      - num_tl_90g_dpd_24m
+      - num_tl_op_past_12m
+      - pct_tl_nvr_dlq
+      - percent_bc_gt_75
+      - tot_hi_cred_lim
+      - total_bal_ex_mort
+      - total_bc_limit
+      - total_il_high_credit_limit
+
+  categorical:
+    - home_ownership
+    - verification_status
+    - purpose
+
+  # PEMBANDING -- hasil penilaian risiko oleh Lending Club sendiri.
+  # Tidak pernah dilihat model utama.
+  benchmark:
     - grade
     - sub_grade
-    - emp_title
-    - title
-    - address
-    - application_type
-    - loan_status
+    - int_rate
+    - installment
 
-  # Nilai sentinel, bukan data asli. Harus dianggap kosong.
+  # HASIL -- informasi SETELAH pinjaman berjalan.
+  # Dipakai untuk menghitung target, EAD, LGD, dan untung.
+  # DILARANG masuk daftar fitur -- memakainya sama dengan menyontek.
+  outcome:
+    - loan_status              # -> target
+    - funded_amnt              # -> dasar EAD
+    - total_rec_prncp          # -> EAD = funded_amnt - total_rec_prncp
+    - recoveries               # -> LGD
+    - collection_recovery_fee  # -> LGD dan untung
+    - total_pymnt              # -> untung (sudah termasuk recoveries)
+    - total_rec_int            # -> rincian untung
+    - out_prncp                # -> pemeriksaan: harus 0 kalau sudah selesai
+    - last_pymnt_d             # -> pemeriksaan pemotongan data
+
+  # Kolom yang dibaca hanya untuk menyaring, bukan fitur.
+  filter_columns:
+    - application_type
+    - term
+
+# ---------------------------------------------------------------------
+# KEBIJAKAN FITUR
+# ---------------------------------------------------------------------
+feature_policy:
+  active: application_only
+
+  # Pembanding: fitur ditambah variabel harga. Selisih hasilnya mengukur
+  # seberapa besar model bergantung pada penilaian Lending Club.
+  with_pricing_adds:
+    - int_rate
+    - installment
+
+# ---------------------------------------------------------------------
+# PEMBERSIHAN
+# ---------------------------------------------------------------------
+cleaning:
+  # Nilai yang bukan data asli, harus dianggap kosong.
   sentinels:
-    dti: {max_valid: 100}
+    dti: {min_valid: 0, max_valid: 100}
     annual_inc: {min_valid: 1}
 
-  # mort_acc kosong di 9,5% baris. Kemungkinan informatif,
-  # jadi ditandai, bukan sekadar diisi median.
-  missing_indicators: [mort_acc]
+  # Kolom yang kekosongannya bermakna, misalnya "tidak pernah menunggak".
+  # Diberi penanda sendiri SEBELUM diisi, supaya informasinya tidak hilang.
+  missing_indicators:
+    - emp_length
+    - mths_since_last_delinq
+    - mths_since_last_record
+    - mths_since_last_major_derog
+    - mths_since_recent_bc_dlq
+    - mths_since_recent_revol_delinq
 
+# ---------------------------------------------------------------------
+# MODEL
+# ---------------------------------------------------------------------
 model:
   champion: logistic_regression
   challengers: [random_forest, gradient_boosting]
-  # Sengaja null. class_weight="balanced" menaikkan recall tapi
-  # merusak kalibrasi, sehingga output berhenti menjadi PD.
+
+  # Sengaja null. class_weight="balanced" menaikkan recall tetapi
+  # menggeser probabilitas, sehingga output berhenti menjadi PD.
   class_weight: null
-  # Imputasi dilakukan DI DALAM Pipeline, supaya median hanya
+
+  # Pengisian kosong dilakukan DI DALAM Pipeline, supaya median hanya
   # dihitung dari data latih.
   imputation: median
 
+# ---------------------------------------------------------------------
+# KEBIJAKAN KREDIT
+#
+# LGD dan EAD TIDAK ada di sini -- keduanya dihitung dari data, dari
+# kolom hasil. Begitu juga untung:
+#   untung = total_pymnt - collection_recovery_fee - funded_amnt
+# ---------------------------------------------------------------------
 policy:
-  # Garis batas TIDAK ditulis di sini. Yang ditulis adalah aturannya,
-  # lalu program mencari garis paling untung yang memenuhi aturan itu.
   risk_appetite:
-    # Dari semua pinjaman yang disetujui, maksimal 15 dari 100 boleh
-    # gagal bayar. Ini keputusan bisnis, bukan hasil perhitungan --
-    # di bank, angka ini ditetapkan oleh direksi.
-    max_portfolio_default_rate: 0.15
+    # Dari semua pinjaman yang disetujui, maksimal 10 dari 100 boleh
+    # gagal bayar. Ini keputusan kebijakan, bukan hasil perhitungan.
+    #
+    # Turun dari 15% di versi sebelumnya: default rate seluruh pemohon
+    # 36 bulan hanya 13,7-14,9%, sehingga batas 15% tidak menyaring
+    # apa pun. 10% dipilih sekitar dua pertiga dari default rate
+    # populasi, rasio yang sama dengan versi sebelumnya (15 dari 22).
+    # Ditinjau ulang setelah kurvanya terlihat di Langkah 4.
+    max_portfolio_default_rate: 0.10
 
-  # Kalau gagal bayar, berapa persen pinjaman yang benar-benar hilang.
-  # ASUMSI -- dataset tidak punya catatan penagihan setelah gagal bayar.
-  lgd_assumption: 0.65
-  lgd_sensitivity: [0.45, 0.55, 0.65, 0.75, 0.85]
-
-  # Dari bunga yang diterima, berapa persen dihitung sebagai untung.
-  #
-  # Diset 1.0, artinya yang dihitung adalah KONTRIBUSI KREDIT:
-  # bunga yang masuk dikurangi pokok yang hilang, SEBELUM biaya dana
-  # dan biaya operasional.
-  #
-  # Kenapa biaya dana dan operasional tidak dihitung: keduanya tidak
-  # bisa diestimasi dari dataset ini, dan besarnya bergantung pada
-  # struktur lembaga pemberi pinjaman -- bukan pada keputusan kredit.
-  #
-  # Versi sebelumnya memakai 0.45 tanpa dasar yang kuat, dan hasilnya
-  # tidak masuk akal: garis optimal 8%, menolak 87% pemohon.
-  net_margin: 1.0
-
+  # Rentang garis batas yang dicoba. Lebih rendah dari sebelumnya,
+  # karena PD pinjaman 36 bulan lebih kecil.
   sweep:
-    start: 0.05
-    stop: 0.60
+    start: 0.02
+    stop: 0.40
     step: 0.01
