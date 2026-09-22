@@ -27,8 +27,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+import warnings
+
 import joblib
 import pandas as pd
+
+# Peringatan ini muncul ketika tahun validasi atau uji punya kategori yang
+# tidak pernah muncul di tahun latih -- misalnya tempat tinggal OTHER yang
+# baru ada belakangan. Model menanganinya dengan benar (memperlakukannya
+# sebagai kategori acuan), jadi peringatannya hanya mengotori layar.
+# Yang diredam HANYA peringatan ini, peringatan lain tetap tampil.
+warnings.filterwarnings("ignore", message="Found unknown categories",
+                        category=UserWarning)
 
 from src import db
 from src.config import load

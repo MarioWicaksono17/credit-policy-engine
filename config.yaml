@@ -212,6 +212,21 @@ cleaning:
     - mths_since_recent_bc_dlq
     - mths_since_recent_revol_delinq
 
+  # Tujuan pinjaman yang dipertahankan sebagai kategori sendiri.
+  # Sisanya digabung ke "other".
+  #
+  # Aturannya: dipertahankan kalau porsinya minimal sekitar 2% di data
+  # latih, ditambah small_business karena risikonya jelas jauh lebih
+  # tinggi. Kategori yang terlalu kecil menghasilkan koefisien yang
+  # tidak stabil -- dihitung dari sedikit orang, angkanya bisa kebetulan.
+  # Porsi dan default rate tiap tujuan ditampilkan saat p2 dijalankan.
+  purpose_keep:
+    - debt_consolidation
+    - credit_card
+    - home_improvement
+    - major_purchase
+    - small_business
+
 # ---------------------------------------------------------------------
 # PENYARINGAN FITUR -- dari 67 menjadi belasan
 # Seluruhnya dihitung HANYA dari data latih (2013).

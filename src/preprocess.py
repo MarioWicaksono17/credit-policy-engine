@@ -175,9 +175,14 @@ def clean(raw: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df["fico_score"] = (df["fico_range_low"] + df["fico_range_high"]) / 2
 
     # --- 5. Kategori langka digabung
+    # Tempat tinggal yang jarang digabung ke OTHER
     df["home_ownership"] = df["home_ownership"].where(
         ~df["home_ownership"].isin(RARE_HOME_OWNERSHIP), "OTHER"
     )
+
+    # Tujuan pinjaman yang langka digabung ke "other"
+    simpan = set(cfg["cleaning"]["purpose_keep"])
+    df["purpose"] = df["purpose"].where(df["purpose"].isin(simpan), "other")
 
     # --- 6. Nilai sentinel menjadi kosong
     for kolom, aturan in cfg["cleaning"]["sentinels"].items():

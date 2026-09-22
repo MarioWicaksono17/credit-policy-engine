@@ -60,6 +60,26 @@ def main():
         print(f"{tahun:>6} {peran.get(tahun, '-'):>9} {len(g):>10,} "
               f"{g['default_flag'].mean():>8.1%} {g['lgd'].mean():>6.3f}")
 
+    # --- dasar penggabungan tujuan pinjaman, dari data latih
+    latih = raw[raw["issue_d"].str[-4:].astype(int).isin(s["train_years"])]
+    gagal = latih["loan_status"].isin(cfg["data"]["default_labels"])
+    tabel = (latih.assign(gagal=gagal).groupby("purpose")
+             .agg(porsi=("gagal", "size"), default=("gagal", "mean"))
+             .sort_values("porsi", ascending=False))
+    tabel["porsi"] = tabel["porsi"] / len(latih)
+    simpan = set(cfg["cleaning"]["purpose_keep"])
+
+    print(f"\nTujuan pinjaman di data latih {s['train_years']}:")
+    print(f"  {'tujuan':<20} {'porsi':>7} {'default':>8}   keputusan")
+    for tujuan, r in tabel.iterrows():
+        if tujuan in simpan:
+            keputusan = "dipertahankan"
+        elif tujuan == "other":
+            keputusan = "tetap other"
+        else:
+            keputusan = "digabung ke other"
+        print(f"  {tujuan:<20} {r['porsi']:>7.1%} {r['default']:>8.1%}   {keputusan}")
+
     print(f"\nKolom           : {silver.shape[1]}")
     print(f"Default rate    : {silver['default_flag'].mean():.2%}")
     print(f"LGD rata-rata   : {silver['lgd'].mean():.3f}")
