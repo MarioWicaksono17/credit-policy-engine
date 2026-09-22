@@ -17,7 +17,8 @@ from dotenv import dotenv_values
 ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED = ["project", "model_version", "seed", "data", "filters", "split",
-            "columns", "feature_policy", "cleaning", "model", "policy"]
+            "columns", "feature_policy", "cleaning", "feature_selection",
+            "model", "policy"]
 
 
 def all_features(cfg: dict) -> list:

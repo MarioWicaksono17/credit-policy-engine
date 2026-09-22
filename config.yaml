@@ -213,6 +213,29 @@ cleaning:
     - mths_since_recent_revol_delinq
 
 # ---------------------------------------------------------------------
+# PENYARINGAN FITUR -- dari 67 menjadi belasan
+# Seluruhnya dihitung HANYA dari data latih (2013).
+# ---------------------------------------------------------------------
+feature_selection:
+  # Jumlah kelompok saat menghitung Information Value.
+  bins: 10
+
+  # Information Value di bawah ini dianggap tidak membedakan peminjam
+  # baik dan buruk. Patokan baku di industri kredit.
+  min_iv: 0.02
+
+  # Di atas ini, variabel patut dicurigai sebagai kebocoran data --
+  # terlalu bagus untuk jadi kenyataan.
+  suspicious_iv: 0.5
+
+  # Dua variabel dengan korelasi di atas ini dianggap kembar.
+  # Yang dipertahankan: yang Information Value-nya lebih tinggi.
+  max_correlation: 0.7
+
+  # Batas jumlah fitur model utama, supaya tetap bisa dijelaskan.
+  max_features: 20
+
+# ---------------------------------------------------------------------
 # MODEL
 # ---------------------------------------------------------------------
 model:
