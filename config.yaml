@@ -265,6 +265,16 @@ model:
   # dihitung dari data latih.
   imputation: median
 
+  # Koreksi kalibrasi: menggeser seluruh PD dengan satu angka yang sama,
+  # supaya rata-ratanya cocok dengan kenyataan. Urutan risiko tidak
+  # berubah sama sekali -- AUC sebelum dan sesudah akan identik.
+  #
+  # Penggesernya dihitung dari data VALIDASI (2014), bukan data uji.
+  # Menghitungnya dari data uji sama dengan mengintip jawaban.
+  calibration:
+    enabled: true
+    fit_on: validation
+
 # ---------------------------------------------------------------------
 # KEBIJAKAN KREDIT
 #
@@ -283,6 +293,11 @@ policy:
     # populasi, rasio yang sama dengan versi sebelumnya (15 dari 22).
     # Ditinjau ulang setelah kurvanya terlihat di Langkah 4.
     max_portfolio_default_rate: 0.10
+
+  # Uji ketahanan: kerugian dikalikan sekian kali lipat, lalu dilihat
+  # apakah kontribusinya masih positif. Bukan ramalan -- hanya untuk
+  # mengukur seberapa tebal bantalannya.
+  stress_multipliers: [1.0, 1.2, 1.4, 1.6, 1.8, 2.0]
 
   # Rentang garis batas yang dicoba. Lebih rendah dari sebelumnya,
   # karena PD pinjaman 36 bulan lebih kecil.

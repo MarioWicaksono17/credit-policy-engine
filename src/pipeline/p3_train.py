@@ -41,6 +41,7 @@ warnings.filterwarnings("ignore", message="Found unknown categories",
                         category=UserWarning)
 
 from src import db
+from src.calibration import apply_offset, fit_offset, summarize
 from src.config import load
 from src.features import (coefficient_table, prepare, select_features, sign_flips,
                           split_numeric_categorical, split_xy)
@@ -135,16 +136,40 @@ def main():
         p = latih(nama, semua, cfg, bagian["train"])
         hasil[nama] = nilai(p, semua, uji_waktu)
 
+    # ------------------------------------------------------------ 3b. koreksi kalibrasi
+    kal = cfg["model"].get("calibration", {})
+    offset = 0.0
+    ringkas_kal = {}
+    if kal.get("enabled"):
+        print("\n3b. Menghitung koreksi kalibrasi dari data validasi ...")
+        X_v, y_v = split_xy(bagian["oot_val"], terpilih)
+        p_v = model_utama.predict_proba(X_v)[:, 1]
+        offset = fit_offset(y_v, p_v)
+        print(f"  penggeser log-odds: {offset:+.4f}")
+
+        terkoreksi = {}
+        for label, data in uji_waktu.items():
+            X, y = split_xy(data, terpilih)
+            p = model_utama.predict_proba(X)[:, 1]
+            ringkas_kal[label] = summarize(y, p, offset)
+            terkoreksi[label] = evaluate(y, apply_offset(p, offset))
+        hasil["champion_calibrated"] = terkoreksi
+
     # ------------------------------------------------------------ 4. kalibrasi
     X_uji, y_uji = split_xy(bagian["oot_test"], terpilih)
     p_uji = model_utama.predict_proba(X_uji)[:, 1]
     gabung = pd.concat([bagian["train"], bagian["oot_val"], bagian["oot_test"]])
     X_g, y_g = split_xy(gabung, terpilih)
+    p_gabung = model_utama.predict_proba(X_g)[:, 1]
     diagnosis = {
         "calibration_deciles": calibration_table(y_uji, p_uji),
-        "by_vintage": vintage_table(gabung["issue_year"], y_g,
-                                    model_utama.predict_proba(X_g)[:, 1]),
+        "by_vintage": vintage_table(gabung["issue_year"], y_g, p_gabung),
     }
+    if offset:
+        diagnosis["calibration_deciles_calibrated"] = calibration_table(
+            y_uji, apply_offset(p_uji, offset))
+        diagnosis["by_vintage_calibrated"] = vintage_table(
+            gabung["issue_year"], y_g, apply_offset(p_gabung, offset))
 
     iv_semua = laporan.set_index("feature")["iv"].to_dict()
     koefisien = coefficient_table(model_utama, iv_semua, kategori)
@@ -162,6 +187,9 @@ def main():
         "champion": juara,
         "numeric": numerik,
         "categorical": kategori,
+        # Dipakai p4 dan API: PD mentah harus digeser sebesar angka ini
+        "calibration_offset": round(offset, 6),
+        "calibration_fit_on": kal.get("fit_on") if offset else None,
     })
     tulis("feature_selection.json", {
         "chosen_on": "train",
@@ -173,6 +201,8 @@ def main():
     })
     tulis("metrics.json", {
         "model_version": cfg["model_version"],
+        "calibration": {"offset": round(offset, 6), "fit_on": kal.get("fit_on"),
+                        "summary": ringkas_kal},
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "champion": juara,
         "split_sizes": {k: len(v) for k, v in {**bagian, **acak}.items()},
@@ -202,7 +232,7 @@ def main():
     print("PERBANDINGAN MODEL (data uji 2015)")
     print("=" * 68)
     print(f"{'model':<32} {'fitur':>6} {'AUC':>7} {'KS':>7} {'selisih kalibrasi':>18}")
-    jumlah = {"champion": len(terpilih), "with_pricing": len(terpilih) + len(tambah)}
+    jumlah = {"champion": len(terpilih), "champion_calibrated": len(terpilih), "with_pricing": len(terpilih) + len(tambah)}
     for nama, r in hasil.items():
         t = r["oot_test"]
         print(f"{nama:<32} {jumlah.get(nama, len(semua)):>6} {t['auc']:>7.4f} "
@@ -211,6 +241,22 @@ def main():
         r = hasil["champion"]["random_test"]
         print(f"{'champion, pembagian acak':<32} {len(terpilih):>6} {r['auc']:>7.4f} "
               f"{r['ks']:>7.4f} {r['calibration_gap_pp']:>+17.2f} pp")
+
+    if offset:
+        print("\n" + "=" * 68)
+        print("KOREKSI KALIBRASI")
+        print("=" * 68)
+        print(f"Penggeser log-odds {offset:+.4f}, dihitung dari data validasi 2014.")
+        print(f"\n{'data':>10} {'kenyataan':>11} {'sebelum':>10} {'sesudah':>10} "
+              f"{'selisih sebelum':>16} {'selisih sesudah':>16}")
+        for label, r in ringkas_kal.items():
+            print(f"{label:>10} {r['actual_rate']:>11.4f} {r['mean_predicted_before']:>10.4f} "
+                  f"{r['mean_predicted_after']:>10.4f} {r['gap_pp_before']:>+15.2f} pp "
+                  f"{r['gap_pp_after']:>+15.2f} pp")
+        a = hasil["champion"]["oot_test"]["auc"]
+        b = hasil["champion_calibrated"]["oot_test"]["auc"]
+        print(f"\nAUC sebelum {a:.4f}  sesudah {b:.4f}  -- "
+              f"{'identik, urutan tidak berubah' if a == b else 'BERBEDA, periksa'}")
 
     print("\n" + "=" * 68)
     print("KALIBRASI PER TINGKAT RISIKO (data uji 2015)")
@@ -227,6 +273,12 @@ def main():
     for r in diagnosis["by_vintage"]:
         print(f"{r['vintage']:>6} {r['n']:>10,} {r['predicted_defaults']:>11,} "
               f"{r['actual_defaults']:>11,} {r['gap_pp']:>+9.2f} pp")
+    if offset:
+        print("\nSetelah koreksi:")
+        print(f"{'tahun':>6} {'pinjaman':>10} {'perkiraan':>11} {'kenyataan':>11} {'selisih':>10}")
+        for r in diagnosis["by_vintage_calibrated"]:
+            print(f"{r['vintage']:>6} {r['n']:>10,} {r['predicted_defaults']:>11,} "
+                  f"{r['actual_defaults']:>11,} {r['gap_pp']:>+9.2f} pp")
 
     print(f"\nTersimpan di artifacts/. Waktu {time.time() - mulai:.0f} detik.")
 
