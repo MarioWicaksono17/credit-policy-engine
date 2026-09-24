@@ -56,7 +56,40 @@ def to_frame(app: dict, meta: dict) -> pd.DataFrame:
 # ---------------------------------------------------------------------
 # Menghitung sumbangan tiap variabel
 # ---------------------------------------------------------------------
-def contributions(model, meta: dict, app: dict) -> tuple:
+def category_baselines(model, meta: dict, reference: dict) -> dict:
+    """Sumbangan RATA-RATA setiap variabel kategori di seluruh populasi.
+
+    Kenapa ini perlu. Variabel angka sudah diseragamkan terhadap rata-rata
+    pemohon, jadi nilai rata-rata menghasilkan sumbangan nol. Variabel
+    kategori tidak begitu: model membandingkannya dengan satu kategori
+    acuan yang dipilih otomatis menurut abjad.
+
+    Akibatnya kategori paling umum bisa muncul sebagai alasan penolakan,
+    padahal mayoritas pemohon ada di situ. Itu alasan yang tidak masuk akal
+    untuk disampaikan ke pemohon.
+
+    Fungsi ini menghitung rata-rata tertimbang sumbangan tiap kategori,
+    memakai porsi populasi di data latih. Angka itu lalu dikurangkan,
+    sehingga kategori paling umum mendekati nol -- sama seperti variabel
+    angka yang nilainya rata-rata.
+    """
+    nama = list(model[:-1].get_feature_names_out())
+    koef = model[-1].coef_[0]
+
+    dasar = {}
+    for f in meta["categorical"]:
+        porsi = reference["categorical"].get(f, {}).get("shares", {})
+        rata = 0.0
+        for nilai, bagian in porsi.items():
+            kolom = f"cat__{f}_{nilai}"
+            # Kategori acuan tidak punya kolom sendiri, sumbangannya nol
+            if kolom in nama:
+                rata += bagian * float(koef[nama.index(kolom)])
+        dasar[f] = rata
+    return dasar
+
+
+def contributions(model, meta: dict, app: dict, baselines: dict = None) -> tuple:
     """Pecah risiko pemohon menjadi sumbangan per variabel.
 
     Mengembalikan (pd_mentah, daftar_sumbangan).
@@ -81,6 +114,14 @@ def contributions(model, meta: dict, app: dict) -> tuple:
 
     log_odds = intercept + sum(kumpul.values())
     pd_mentah = float(1 / (1 + np.exp(-log_odds)))
+
+    # Sumbangan kategori digeser supaya dibandingkan dengan pemohon
+    # rata-rata, bukan dengan kategori acuan. PD tidak ikut berubah --
+    # yang bergeser hanya cara membaca sumbangannya.
+    if baselines:
+        for f, rata in baselines.items():
+            if f in kumpul:
+                kumpul[f] -= rata
 
     daftar = [{"feature": k, "contribution": round(v, 4)} for k, v in kumpul.items()]
     daftar.sort(key=lambda b: -b["contribution"])
@@ -131,7 +172,8 @@ def assess(app: dict, model, meta: dict, reference: dict, cutoff: float,
            labels: dict, top_n: int = 4) -> dict:
     """Nilai satu pemohon: keputusan, PD, dan alasannya."""
     lengkap = fill_defaults(app, reference, meta)
-    pd_mentah, sumbangan = contributions(model, meta, lengkap)
+    dasar_kategori = category_baselines(model, meta, reference)
+    pd_mentah, sumbangan = contributions(model, meta, lengkap, dasar_kategori)
 
     # PD dikoreksi dengan penggeser yang dihitung di p3 dari data validasi
     pd_akhir = float(apply_offset(pd_mentah, meta.get("calibration_offset", 0.0)))

@@ -98,13 +98,19 @@ def main():
     print(f"    PD {hasil['pd']:.1%}  ->  {hasil['decision']}")
 
     # Pemohon berisiko: beberapa isian dibuat lebih buruk
+    # Dibuat cukup ekstrem -- memakai kuartil saja sering tidak cukup untuk
+    # menguji skenario alternatif, karena nilainya bisa sudah lebih baik
+    # dari target skenario.
+    def titik(f, persen):
+        return angka[f]["quantiles"][persen] if f in angka else None
+
     berisiko = {}
-    for f, buruk in [("dti", "p75"), ("revol_util", "p75"), ("inq_last_6mths", "p75")]:
+    for f in ("dti", "revol_util", "inq_last_6mths", "acc_open_past_24mths"):
         if f in angka:
-            berisiko[f] = angka[f]["max"] if f == "inq_last_6mths" else angka[f][buruk]
+            berisiko[f] = titik(f, 95)          # jauh lebih buruk dari kebanyakan
     for f in ("fico_score", "annual_inc"):
         if f in angka:
-            berisiko[f] = angka[f]["p25"]
+            berisiko[f] = titik(f, 10)
 
     hasil2 = assess(berisiko, model, meta, referensi, garis, label)
     print(f"\n  PEMOHON BERISIKO")

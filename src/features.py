@@ -37,6 +37,13 @@ def prepare(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     bisa dihitung. Kolom kategori dibiarkan sebagai teks biasa.
     """
     df = df.copy()
+
+    # Urutan baris dari PostgreSQL tidak dijamin tetap. Pembagian acak
+    # bergantung pada urutan itu, jadi hasilnya bisa berbeda tipis tiap
+    # kali tabel ditulis ulang. Diurutkan supaya hasil selalu sama persis.
+    if "loan_id" in df.columns:
+        df = df.sort_values("loan_id").reset_index(drop=True)
+
     for c in df.columns:
         if c.endswith("_missing"):
             df[c] = df[c].astype(int)
