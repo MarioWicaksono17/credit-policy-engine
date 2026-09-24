@@ -404,3 +404,27 @@ scenarios:
     changes:
       dti: {set_max: 25}
       revol_util: {set_max: 30}
+
+# ---------------------------------------------------------------------
+# FORMULIR -- variabel mana yang ditanyakan ke pengguna aplikasi.
+#
+# Model memakai 19 variabel, tapi tidak mungkin meminta orang mengisi
+# semuanya. Yang ditanyakan hanya yang mudah dipahami dan diketahui
+# pemohon. Sisanya diisi nilai pemohon rata-rata dari data latih --
+# dan karena nilai rata-rata, variabel itu tidak akan muncul sebagai
+# alasan penolakan.
+#
+# Kalau sebuah variabel di sini ternyata bukan fitur model, API
+# melewatinya dan memberi catatan. Jadi daftar ini aman diubah.
+# ---------------------------------------------------------------------
+form:
+  fields:
+    - annual_inc
+    - dti
+    - fico_score
+    - revol_util
+    - inq_last_6mths
+    - acc_open_past_24mths
+    - mort_acc
+    - purpose
+    - home_ownership
