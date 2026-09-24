@@ -151,18 +151,33 @@ def describe(feature: str, value, reference: dict, labels: dict) -> str:
         tambahan = f", {porsi:.0%} pemohon" if porsi else ""
         return f"{nama}: {arti}{tambahan}"
 
-    p = percentile_of(value, reference["numeric"][feature]["quantiles"])
+    stat = reference["numeric"][feature]
+    p = percentile_of(value, stat["quantiles"])
+
+    # Di ujung sebaran, letak terhadap nilai tengah dan terhadap rata-rata
+    # sejalan, jadi kalimat persentil aman dipakai.
     if p >= 90:
-        banding = "tertinggi 10% populasi"
-    elif p >= 75:
-        banding = "kuartil tertinggi populasi"
-    elif p <= 10:
-        banding = "terendah 10% populasi"
-    elif p <= 25:
-        banding = "kuartil terendah populasi"
-    else:
-        banding = f"di atas {p}% pemohon" if p >= 50 else f"di bawah {100 - p}% pemohon"
-    return f"{nama} {banding}"
+        return f"{nama} tertinggi 10% populasi"
+    if p >= 75:
+        return f"{nama} kuartil tertinggi populasi"
+    if p <= 10:
+        return f"{nama} terendah 10% populasi"
+    if p <= 25:
+        return f"{nama} kuartil terendah populasi"
+
+    # Di tengah sebaran keduanya bisa bertentangan. Contohnya penghasilan:
+    # segelintir orang berpenghasilan sangat besar menarik rata-rata ke
+    # atas, sehingga orang di persentil 51 justru ADA DI BAWAH rata-rata.
+    # Model membandingkan dengan rata-rata, jadi kalimatnya harus begitu
+    # juga -- kalau tidak, kalimat dan angkanya saling bertentangan.
+    rata, sebar = stat.get("mean"), stat.get("std")
+    if rata is None or not sebar:
+        return f"{nama} di sekitar tengah populasi"
+
+    jarak = (float(value) - rata) / sebar
+    if abs(jarak) < 0.25:
+        return f"{nama} mendekati rata-rata pemohon"
+    return f"{nama} {'di atas' if jarak > 0 else 'di bawah'} rata-rata pemohon"
 
 
 # ---------------------------------------------------------------------
@@ -184,8 +199,19 @@ def assess(app: dict, model, meta: dict, reference: dict, cutoff: float,
         b["label"] = labels.get("features", {}).get(b["feature"], b["feature"])
         b["reason"] = describe(b["feature"], b["value"], reference, labels)
 
-    # Alasan penolakan: yang sumbangannya paling menaikkan risiko
-    penaik = [b for b in sumbangan if b["contribution"] > 0][:top_n]
+    # Alasan penolakan hanya disusun kalau pemohonnya memang DITOLAK.
+    # Untuk yang disetujui tidak ada alasan yang perlu disampaikan, dan
+    # memberi label "alasan" pada penyimpangan kecil justru menyesatkan.
+    #
+    # Yang diambil juga hanya alasan yang benar-benar menentukan: minimal
+    # seperlima dari faktor terbesar. Tanpa batas ini, faktor bernilai
+    # +0,04 bisa ikut tampil sebagai alasan di samping faktor +0,32.
+    penaik = []
+    if not disetujui:
+        naik = [b for b in sumbangan if b["contribution"] > 0]
+        if naik:
+            ambang = naik[0]["contribution"] * 0.2
+            penaik = [b for b in naik if b["contribution"] >= ambang][:top_n]
 
     return {
         "pd": round(pd_akhir, 4),

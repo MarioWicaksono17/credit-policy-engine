@@ -319,23 +319,23 @@ labels:
     annual_inc: Penghasilan per tahun
     verification_status: Verifikasi penghasilan
     purpose: Tujuan pinjaman
-    dti: Rasio cicilan terhadap penghasilan
+    dti: Rasio cicilan (DTI)
     fico_score: Skor kredit
     credit_history_years: Lama riwayat kredit
     delinq_2yrs: Tunggakan 2 tahun terakhir
-    inq_last_6mths: Pengajuan kredit 6 bulan terakhir
+    inq_last_6mths: Pengajuan kredit 6 bulan
     mths_since_last_delinq: Bulan sejak tunggakan terakhir
     mths_since_last_record: Bulan sejak catatan publik terakhir
     open_acc: Rekening kredit aktif
     pub_rec: Catatan publik negatif
     revol_bal: Saldo kartu kredit
-    revol_util: Pemakaian limit kartu kredit
+    revol_util: Pemakaian limit kartu
     total_acc: Total rekening kredit
     mort_acc: Jumlah KPR
     pub_rec_bankruptcies: Catatan kebangkrutan
-    collections_12_mths_ex_med: Penagihan pihak ketiga 12 bulan
+    collections_12_mths_ex_med: Penagihan pihak ketiga
     acc_now_delinq: Rekening sedang menunggak
-    chargeoff_within_12_mths: Kredit dihapusbukukan 12 bulan terakhir
+    chargeoff_within_12_mths: Kredit dihapusbukukan 12 bulan
     delinq_amnt: Jumlah tunggakan
     tax_liens: Sitaan pajak
     tot_cur_bal: Total saldo utang
@@ -345,10 +345,10 @@ labels:
     bc_open_to_buy: Sisa limit kartu kredit
     bc_util: Pemakaian limit kartu utama
     percent_bc_gt_75: Persen kartu terpakai di atas 75%
-    acc_open_past_24mths: Rekening baru 2 tahun terakhir
+    acc_open_past_24mths: Rekening baru 2 tahun
     num_tl_op_past_12m: Rekening baru 12 bulan terakhir
-    mths_since_recent_bc: Bulan sejak kartu kredit terakhir dibuka
-    mths_since_recent_inq: Bulan sejak pengajuan kredit terakhir
+    mths_since_recent_bc: Bulan sejak kartu terakhir dibuka
+    mths_since_recent_inq: Bulan sejak pengajuan terakhir
     mo_sin_rcnt_tl: Bulan sejak rekening terakhir dibuka
     mo_sin_rcnt_rev_tl_op: Bulan sejak kartu terakhir dibuka
     mo_sin_old_il_acct: Umur kredit cicilan tertua

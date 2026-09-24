@@ -54,6 +54,12 @@ def main():
     for f in meta["numeric"]:
         kolom = latih[f].astype(float).dropna()
         angka[f] = {
+            # Rata-rata dan simpangannya disimpan karena INILAH pembanding
+            # yang dipakai model. Untuk variabel seperti penghasilan,
+            # rata-rata jauh di atas nilai tengah, sehingga kalimat
+            # "di atas separuh pemohon" bisa bertentangan dengan angkanya.
+            "mean": round(float(kolom.mean()), 4),
+            "std": round(float(kolom.std()), 4),
             "median": round(float(kolom.median()), 4),
             "p25": round(float(kolom.quantile(0.25)), 4),
             "p75": round(float(kolom.quantile(0.75)), 4),

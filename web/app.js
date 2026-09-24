@@ -66,7 +66,7 @@ let formFields = [];
 async function muatForm() {
   formFields = await api('/api/application/form');
 
-  el('p1-form').innerHTML = formFields.map((f) => {
+  const isian = formFields.map((f) => {
     if (f.type === 'pilihan') {
       const opsi = f.options.map((o) =>
         `<option value="${escapeHtml(o.value)}"${o.value === f.default ? ' selected' : ''}>
@@ -82,7 +82,24 @@ async function muatForm() {
             </div>`;
   }).join('');
 
+  // Satu kolom, supaya semua kotak isian lurus sejajar ke bawah.
+  el('p1-form').innerHTML = `<div class="fgrid">${isian}</div>`;
+
   el('p1-go').disabled = false;
+  gambarStripKosong();
+}
+
+/** Papan keputusan dalam keadaan belum diisi.
+ *  Ditampilkan sejak awal supaya tinggi halaman tidak melompat saat
+ *  hasil pertama muncul. */
+function gambarStripKosong() {
+  el('p1-strip').innerHTML = `
+    <div class="strip kosong">
+      <div class="c"><div class="k">Keputusan</div>
+        <div class="v">&mdash;</div><div class="s">belum dinilai</div></div>
+      <div class="c"><div class="k">Probability of default</div>
+        <div class="v">&mdash;</div><div class="s">isi formulir, lalu klik Nilai aplikasi</div></div>
+    </div>`;
 }
 
 /** Kumpulkan isian formulir menjadi satu objek. */
@@ -132,7 +149,16 @@ function gambarHasil(r) {
   r.reason_codes.forEach((x) => { kode[x.feature] = x.code; });
   const maks = Math.max(...r.contributions.map((c) => Math.abs(c.contribution)), 0.01);
 
-  const baris = r.contributions.map((c) => {
+  // Hanya sepuluh faktor terbesar yang ditampilkan. Sisanya pengaruhnya
+  // kecil dan cuma memanjangkan tabel; jumlahnya tetap disebut di bawah.
+  const BATAS = 8;
+  const urut = [...r.contributions].sort(
+    (a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
+  const tampil = urut.slice(0, BATAS);
+  const sisa = urut.slice(BATAS);
+  const sisaTotal = sisa.reduce((t, c) => t + c.contribution, 0);
+
+  const baris = tampil.map((c) => {
     const lebar = (Math.abs(c.contribution) / maks) * 50;
     const bar = c.contribution >= 0
       ? `<i class="p" style="width:${lebar}%"></i>`
@@ -153,8 +179,15 @@ function gambarHasil(r) {
       <th>Kode</th><th>Faktor</th><th class="num">Nilai</th>
       <th></th><th class="num">Kontribusi</th>
     </tr></thead><tbody>${baris}</tbody></table>
-    <p class="fn">RC1&ndash;RC4 adalah alasan yang disampaikan ke pemohon.
-    Nilai positif menaikkan risiko dibanding pemohon rata-rata.</p>`;
+    <p class="fn">${r.reason_codes.length
+      ? `RC1&ndash;RC${r.reason_codes.length} adalah alasan penolakan yang
+         disampaikan ke pemohon.`
+      : `Pemohon disetujui, jadi tidak ada alasan penolakan. Tabel ini rincian
+         perhitungan PD.`}
+    Nilai positif menaikkan risiko dibanding pemohon rata-rata.${sisa.length
+      ? ` Menampilkan ${BATAS} faktor terbesar dari ${urut.length};
+         ${sisa.length} sisanya berjumlah ${sisaTotal >= 0 ? '+' : ''}${angka(sisaTotal, 2)}.`
+      : ''}</p>`;
 
   // --- skenario alternatif
   const sc = r.scenarios.map((s) => `
@@ -193,6 +226,10 @@ async function muatKebijakan() {
   el('p2-vs').textContent = `vs batas berlaku ${persen(sweep.chosen_cutoff, 0)}`;
 
   s.oninput = () => gambarKebijakan(rows[Number(s.value)]);
+  el('p2-note').innerHTML =
+    `<b>Batas PD</b> adalah ambang untuk satu pemohon: di atas angka ini, ditolak. ` +
+    `<b>Batas risiko</b> menilai hasilnya: dari seluruh yang disetujui, maksimal ` +
+    `${persen(sweep.risk_appetite, 0)} boleh gagal bayar. Keduanya angka yang berbeda.`;
   gambarKebijakan(rows[Number(s.value)]);
 }
 
@@ -258,24 +295,33 @@ function gambarKebijakan(r) {
   // --- kesimpulan
   const batas = sweep.risk_appetite;
   const lewat = r.default_rate > batas;
-  const puncak = Math.max(...sweep.rows.map((x) => x.contribution));
+
+  // Pembandingnya adalah kontribusi tertinggi DI ANTARA GARIS YANG AMAN.
+  // Sebelumnya dibandingkan dengan tertinggi di seluruh tabel -- padahal
+  // yang tertinggi selalu melewati batas risiko, sehingga tidak pernah
+  // ada garis yang dinilai baik.
+  const aman = sweep.rows.filter((x) => x.default_rate !== null && x.default_rate <= batas);
+  const puncak = aman.length ? Math.max(...aman.map((x) => x.contribution)) : 0;
   let jenis, teks;
 
   if (lewat) {
     jenis = 'bad';
-    teks = `<b>Melewati batas risiko.</b> Default rate ${persen(r.default_rate)}
-      di atas batas ${persen(batas, 0)}. Kontribusi memang lebih besar, tapi
-      ${angka(r.approved_bad)} pinjaman gagal bayar ikut disetujui.`;
-  } else if (r.contribution >= puncak * 0.9) {
+    const terlonggar = aman.length ? Math.max(...aman.map((x) => x.cutoff)) : null;
+    teks = `<b>Melewati batas risiko.</b> Dengan batas PD ${persen(r.cutoff, 0)},
+      ${angka(r.n_approved)} pemohon disetujui dan ${persen(r.default_rate)} di antaranya
+      gagal bayar &mdash; di atas batas ${persen(batas, 0)}.
+      ${terlonggar !== null ? `Batas PD paling longgar yang masih memenuhi batas risiko
+      adalah ${persen(terlonggar, 0)}.` : ''}`;
+  } else if (r.contribution >= puncak * 0.85) {
     jenis = 'ok';
-    teks = `<b>Titik yang baik.</b> Default rate ${persen(r.default_rate)} masih di
-      bawah batas ${persen(batas, 0)}, dan kontribusinya mendekati yang tertinggi
-      di antara garis batas yang aman.`;
+    teks = `<b>Titik yang baik.</b> Dengan batas PD ${persen(r.cutoff, 0)},
+      default rate ${persen(r.default_rate)} masih di bawah batas ${persen(batas, 0)},
+      dan kontribusinya mendekati yang tertinggi di antara garis batas yang aman.`;
   } else {
     jenis = 'warn';
-    teks = `<b>Terlalu ketat.</b> Default rate ${persen(r.default_rate)} jauh di bawah
-      batas ${persen(batas, 0)}, tapi ${angka(r.rejected_good)} pemohon yang akan
-      membayar lunas ikut ditolak.`;
+    teks = `<b>Terlalu ketat.</b> Dengan batas PD ${persen(r.cutoff, 0)},
+      default rate ${persen(r.default_rate)} jauh di bawah batas ${persen(batas, 0)},
+      tapi ${angka(r.rejected_good)} pemohon yang akan membayar lunas ikut ditolak.`;
   }
 
   el('p2-verdict').innerHTML = `<div class="callout ${jenis}">${teks}</div>`;
@@ -343,10 +389,14 @@ async function muatModelCard() {
   el('p3-valhint').textContent = `holdout ${id.test_years.join(', ')}`;
 
   // --- variabel: yang dipakai dan yang dibuang
-  const maks = Math.max(...m.features.used.map((b) => Math.abs(b.coef)));
-  const dipakai = m.features.used.map((b) => `
+  const maks = Math.max(...m.features.used.slice(0, 10).map((b) => Math.abs(b.coef)));
+  // Dibatasi dua belas terbesar. Tabel dua puluh lebih baris membuat panel
+  // ini jauh lebih tinggi dari panel di sebelahnya.
+  const BATAS_VAR = 10;
+  const semuaVar = m.features.used;
+  const dipakai = semuaVar.slice(0, BATAS_VAR).map((b) => `
     <tr>
-      <td>${escapeHtml(b.label)}<span class="sub">${b.feature}</span></td>
+      <td>${escapeHtml(b.label)}<span class="sub">${b.base || b.feature}</span></td>
       <td class="num" style="width:38px">
         <span class="dir ${b.coef > 0 ? 'u' : 'd'}">${b.coef > 0 ? '&uarr;' : '&darr;'}</span></td>
       <td style="width:76px"><div class="str">
@@ -365,11 +415,16 @@ async function muatModelCard() {
 
   const harga = m.features.excluded_by_design;
   el('p3-features').innerHTML = `
-    <div class="grid2">
+    <div class="grid2" style="align-items:start">
       <div>
         <table><thead><tr>
           <th>Digunakan</th><th class="num">Arah</th><th>Kekuatan</th><th class="num">Koef.</th>
         </tr></thead><tbody>${dipakai}</tbody></table>
+        ${semuaVar.length > BATAS_VAR
+          ? `<p class="fn">Menampilkan ${BATAS_VAR} baris teratas dari
+             ${semuaVar.length}, diurutkan menurut Information Value. Kolom kategori
+             dipecah menjadi satu baris per nilai, jadi jumlah barisnya lebih banyak
+             dari jumlah variabel.</p>` : ''}
       </div>
       <div>
         <div class="exc">

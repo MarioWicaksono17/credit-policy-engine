@@ -23,22 +23,46 @@ def card():
     juara = m["results"]["champion"]
     terkoreksi = m["results"].get("champion_calibrated", juara)
 
-    # Variabel yang dipakai, beserta kekuatan dan arah pengaruhnya
+    # Variabel yang dipakai, beserta kekuatan dan arah pengaruhnya.
+    #
+    # Kolom kategori dipecah model menjadi beberapa kolom 0/1 -- misalnya
+    # purpose_small_business. Di sini dikembalikan ke nama manusianya,
+    # jadi yang tampil "Tujuan pinjaman: Usaha kecil".
     nama = a.labels.get("features", {})
-    dipakai = [
-        {**b, "label": nama.get(b["feature"], b["feature"]),
-         "direction": "naik" if b["coef"] > 0 else "turun"}
-        for b in m["coefficients"]
-    ]
+    nilai_nama = a.labels.get("values", {})
+    kategori = a.meta["categorical"]
+
+    dipakai = []
+    for b in m["coefficients"]:
+        dasar = next((k for k in kategori if b["feature"].startswith(k + "_")),
+                     b["feature"])
+        tingkat = b["feature"][len(dasar) + 1:] if dasar != b["feature"] else None
+        label = nama.get(dasar, dasar)
+        if tingkat:
+            label += ": " + nilai_nama.get(dasar, {}).get(tingkat, tingkat)
+
+        dipakai.append({**b, "base": dasar, "level": tingkat, "label": label,
+                        "direction": "naik" if b["coef"] > 0 else "turun"})
+
+    # Diurutkan menurut Information Value, bukan besar koefisien.
+    #
+    # Koefisien kategori tidak bisa dibandingkan dengan koefisien angka:
+    # yang satu berlaku untuk semua pemohon, yang lain hanya untuk sebagian
+    # kecil. Tujuan pinjaman "usaha kecil" koefisiennya +1,13 -- terbesar --
+    # padahal hanya menyangkut 1% pemohon dan IV-nya paling rendah.
+    # Mengurutkan menurut koefisien membuatnya terlihat paling penting.
+    dipakai.sort(key=lambda b: (-(b["iv"] if b["iv"] == b["iv"] else 0),
+                                -abs(b["coef"])))
 
     # Variabel yang dibuang, dikelompokkan menurut alasannya
     dibuang = {}
     for f in a.selection["features"]:
         if f["status"] == "dibuang":
             kunci = f["reason"].split(" ")[0]
-            label = {"IV": "tidak membedakan", "kembar": "kembar dengan variabel lain",
-                     "di": "di luar batas jumlah",
-                     "arah": "arah pengaruh tidak masuk akal"}.get(kunci, kunci)
+            label = {"IV": "Tidak membedakan pemohon",
+                     "kembar": "Kembar dengan variabel lain",
+                     "di": "Di luar batas jumlah",
+                     "arah": "Arah pengaruh tidak masuk akal"}.get(kunci, kunci)
             dibuang.setdefault(label, []).append(
                 {"feature": f["feature"], "label": nama.get(f["feature"], f["feature"]),
                  "iv": f["iv"], "reason": f["reason"]})

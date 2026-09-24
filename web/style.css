@@ -7,12 +7,15 @@
   --line:#e3e8ee; --line-2:#ccd4de;
   --ink:#1a2430; --ink-2:#5a6675; --ink-3:#8a94a1;
   --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  /* Satu jenis huruf untuk seluruh halaman. Angka tetap lurus sejajar
+     karena IBM Plex Sans punya angka berlebar sama (tabular numerals). */
+  --mono:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
-  font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  font-variant-numeric:tabular-nums;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
 .shell{display:flex;min-height:100%}
 
 .side{width:214px;flex:0 0 214px;background:var(--navy);color:#cfd8e3;
@@ -33,33 +36,33 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
   font-family:var(--mono);font-size:9px;letter-spacing:.06em;color:#6c7d92;line-height:1.9}
 
 .main{flex:1;min-width:0}
-.topbar{background:var(--card);border-bottom:1px solid var(--line);padding:13px 28px;
+.topbar{background:var(--card);border-bottom:1px solid var(--line);padding:10px 24px;
   display:flex;justify-content:space-between;align-items:center}
 .topbar h1{font-size:16.5px;font-weight:600;margin:0;letter-spacing:-.01em}
 .topbar .meta{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
   color:var(--ink-3);text-align:right}
-.body{padding:16px 28px 24px;max-width:1080px}
+.body{padding:13px 24px 20px;max-width:1100px}
 .page{display:none}.page.on{display:block}
 
-.panel{background:var(--card);border:1px solid var(--line);border-radius:4px;margin-bottom:14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:4px;margin-bottom:11px}
 .panel:last-child{margin-bottom:0}
-.ph{padding:9px 16px;border-bottom:1px solid var(--line);display:flex;
+.ph{padding:7px 14px;border-bottom:1px solid var(--line);display:flex;
   justify-content:space-between;align-items:center;gap:14px}
 .ph h2{font-size:12px;font-weight:600;margin:0}
 .ph .hint{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
-.pb{padding:14px 16px}
-.pb.tight{padding:2px 16px 6px}
+.pb{padding:11px 14px}
+.pb.tight{padding:0 14px 4px}
 
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 28px}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:0 20px}
-.cols{display:grid;grid-template-columns:246px 1fr;gap:14px;align-items:stretch}
+.cols{display:grid;grid-template-columns:268px 1fr;gap:14px;align-items:stretch}
 @media(max-width:940px){.grid2,.grid3,.grid4,.cols{grid-template-columns:1fr}}
 
 table{width:100%;border-collapse:collapse;font-size:12.5px}
-th{text-align:left;font-family:var(--mono);font-weight:400;font-size:9px;letter-spacing:.09em;
+th{text-align:left;font-family:var(--mono);font-weight:400;font-size:8.5px;letter-spacing:.09em;
   text-transform:uppercase;color:var(--ink-3);padding:7px 12px 7px 0;border-bottom:1px solid var(--line)}
-td{padding:8px 12px 8px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+td{padding:6px 10px 6px 0;border-bottom:1px solid var(--line);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 .num{text-align:right}
 .fig{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
@@ -67,26 +70,26 @@ tr:last-child td{border-bottom:none}
 
 .strip{background:var(--navy);border-radius:4px;display:grid;grid-template-columns:1fr 1fr;
   margin-bottom:14px;overflow:hidden}
-.strip .c{padding:14px 18px;border-left:1px solid rgba(255,255,255,.1)}
+.strip .c{padding:11px 16px;border-left:1px solid rgba(255,255,255,.1)}
 .strip .c:first-child{border-left:none}
 .strip .k{font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;
   color:#8697ab;margin-bottom:4px}
-.strip .v{font-size:26px;font-weight:600;color:#fff;line-height:1.1;letter-spacing:-.02em;
+.strip .v{font-size:23px;font-weight:600;color:#fff;line-height:1.1;letter-spacing:-.02em;
   font-variant-numeric:tabular-nums}
 .strip .v.alert{color:#ef9b86}
 .strip .s{font-size:11px;color:#8697ab;margin-top:3px}
 
-.fld{margin-bottom:8px}
+.fld{margin-bottom:0}
 .fld label{display:block;font-size:10.5px;color:var(--ink-2);margin-bottom:3px;font-weight:500}
-.fld input,.fld select{width:100%;padding:5px 9px;border:1px solid var(--line-2);border-radius:3px;
-  font-family:var(--sans);font-size:12.5px;background:#fff;color:var(--ink)}
+.fld input,.fld select{width:100%;padding:4px 8px;border:1px solid var(--line-2);border-radius:3px;
+  font-family:var(--sans);font-size:12px;background:#fff;color:var(--ink)}
 .fld input:focus,.fld select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-soft)}
-.go{width:100%;margin-top:auto;background:var(--blue);color:#fff;border:none;padding:9px;
+.go{width:100%;margin-top:auto;background:var(--blue);color:#fff;border:none;padding:8px;
   border-radius:3px;font-family:var(--sans);font-size:12.5px;font-weight:600;cursor:pointer}
 .go:hover{background:#1d5391}
 .formcol{display:flex;flex-direction:column}
 .formcol .pb{flex:1;display:flex;flex-direction:column}
-.formcol .fld:last-of-type{margin-bottom:14px}
+.formcol .fgrid{margin-bottom:12px}
 
 .rc{font-family:var(--mono);font-size:9px;color:#fff;background:var(--navy);padding:2px 5px;
   border-radius:2px;letter-spacing:.04em}
@@ -101,27 +104,27 @@ tr:last-child td{border-bottom:none}
 .ctrl{display:flex;align-items:center;gap:24px}
 .ctrl .lb{font-size:12.5px;color:var(--ink-2);width:78px;flex:0 0 78px}
 .ctrl input[type=range]{flex:1;accent-color:var(--blue);height:4px}
-.ctrl .out{font-size:28px;font-weight:600;width:78px;text-align:right;letter-spacing:-.02em;
+.ctrl .out{font-size:24px;font-weight:600;width:78px;text-align:right;letter-spacing:-.02em;
   font-variant-numeric:tabular-nums;color:var(--navy)}
 
 /* ---- population bar ---- */
 .splits{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;
   letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:7px}
 .splits b{color:var(--ink);font-weight:600}
-.pbar{display:flex;height:38px;border-radius:3px;overflow:hidden}
+.pbar{display:flex;height:32px;border-radius:3px;overflow:hidden}
 .pbar div{display:flex;align-items:center;justify-content:center;font-family:var(--mono);
   font-size:11px;font-variant-numeric:tabular-nums;min-width:0}
 .g1{background:#2e7d5b;color:#fff}.g2{background:#b3412e;color:#fff}
 .g3{background:#eccdc4;color:#8a3423}.g4{background:#d6dce4;color:#5a6675}
 .pax{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;
   letter-spacing:.06em;color:var(--ink-3);margin-top:6px}
-.keys{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.keys{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
 .keys .k{padding-left:16px;position:relative}
 .keys .k::before{content:'';position:absolute;left:0;top:4px;width:9px;height:9px;border-radius:2px}
 .keys .k1::before{background:#2e7d5b}.keys .k2::before{background:#b3412e}
 .keys .k3::before{background:#eccdc4}.keys .k4::before{background:#d6dce4}
-.keys .t{font-size:11.5px;color:var(--ink-2);line-height:1.4;min-height:32px}
-.keys .n{font-family:var(--mono);font-size:15px;font-weight:600;margin-top:3px;
+.keys .t{font-size:11px;color:var(--ink-2);line-height:1.35;min-height:28px}
+.keys .n{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:3px;
   font-variant-numeric:tabular-nums}
 
 .callout{border-left:3px solid var(--blue);background:var(--blue-soft);padding:11px 15px;
@@ -193,3 +196,26 @@ tr:last-child td{border-bottom:none}
 .go:disabled{background:var(--line-2);cursor:wait}
 .fld .hint{font-family:var(--mono);font-size:9px;color:var(--ink-3);float:right;font-weight:400}
 .muted{color:var(--ink-3)}
+
+/* ---- formulir satu kolom ----
+   Semua kotak isian lurus sejajar ke bawah dengan lebar yang sama.
+   Dua kolom sempat dicoba untuk menghemat tinggi, tapi di kolom
+   selebar ini labelnya turun dua baris dan kotaknya jadi tidak rata.
+   Tingginya dihemat dengan cara lain: jarak antar isian dirapatkan
+   dan kolomnya sedikit dilebarkan supaya label muat satu baris. */
+.fgrid{display:grid;grid-template-columns:1fr;gap:7px}
+.fgrid .fld label{margin-bottom:2px;font-size:10px}
+
+/* ---- meluruskan garis bawah kedua kolom ----
+   Panel biasa punya jarak bawah 14px. Di dalam .cols, jarak itu membuat
+   kotak kiri berakhir 14px lebih tinggi dari kotak kanan. Jarak antar
+   panel di kolom kanan diurus 'gap', bukan margin. */
+.cols > .panel{margin-bottom:0}
+.stack{display:flex;flex-direction:column;gap:14px}
+.stack > .panel{margin-bottom:0}
+.stack > .panel:last-child{flex:1}
+
+/* ---- keadaan sebelum ada hasil ---- */
+.strip.kosong .v{color:#5c6e85}
+.p2note{font-size:11.5px;color:var(--ink-2);margin:10px 0 0;line-height:1.5}
+.p2note b{color:var(--ink);font-weight:600}
