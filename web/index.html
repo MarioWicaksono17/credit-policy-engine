@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Credit Policy Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!--
+  Halaman ini sengaja hampir kosong. Semua angka datang dari API saat
+  halaman dibuka -- tidak ada satu pun angka yang ditulis di sini.
+
+  Kalau model dilatih ulang dan angkanya berubah, halaman ini tidak
+  perlu disentuh sama sekali.
+-->
+
+<div class="shell">
+<aside class="side">
+  <div class="brand">
+    <div class="n">Credit Policy Engine</div>
+    <div class="d" id="brand-sub">memuat...</div>
+  </div>
+  <nav class="nav">
+    <button class="on" data-p="p1"><span class="ix">01</span>Penilaian aplikasi</button>
+    <button data-p="p2"><span class="ix">02</span>Kebijakan kredit</button>
+    <button data-p="p3"><span class="ix">03</span>Model card</button>
+  </nav>
+  <div class="sfoot" id="side-foot">memuat...</div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <h1 id="page-title">Penilaian aplikasi</h1>
+    <div class="meta" id="page-meta"></div>
+  </div>
+
+  <div class="body">
+    <div id="err-box"></div>
+
+    <!-- ============ HALAMAN 1: Penilaian aplikasi ============ -->
+    <section class="page on" id="p1">
+      <div id="p1-strip"></div>
+
+      <div class="cols">
+        <div class="panel formcol">
+          <div class="ph"><h2>Data pemohon</h2></div>
+          <div class="pb">
+            <div id="p1-form"><div class="loading">memuat formulir...</div></div>
+            <button class="go" id="p1-go" disabled>Nilai aplikasi</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="panel">
+            <div class="ph">
+              <h2>Faktor penentu</h2>
+              <span class="hint">kontribusi log-odds</span>
+            </div>
+            <div class="pb tight" id="p1-factors">
+              <div class="loading">isi formulir, lalu klik Nilai aplikasi</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="ph">
+              <h2>Skenario alternatif</h2>
+              <span class="hint">counter-offer</span>
+            </div>
+            <div class="pb tight" id="p1-scenarios">
+              <div class="loading">belum ada</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HALAMAN 2: Kebijakan kredit ============ -->
+    <section class="page" id="p2">
+      <div class="panel">
+        <div class="pb">
+          <div class="ctrl">
+            <div class="lb">Batas PD</div>
+            <input type="range" id="p2-slider" min="0" max="0" value="0" step="1" disabled>
+            <div class="out" id="p2-out">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <h2>Distribusi hasil</h2>
+          <span class="hint" id="p2-hint"></span>
+        </div>
+        <div class="pb" id="p2-dist"><div class="loading">memuat...</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="ph">
+          <h2>Dampak portfolio</h2>
+          <span class="hint" id="p2-vs"></span>
+        </div>
+        <div class="pb tight" id="p2-impact"></div>
+      </div>
+
+      <div id="p2-verdict"></div>
+    </section>
+
+    <!-- ============ HALAMAN 3: Model card ============ -->
+    <section class="page" id="p3">
+      <div class="grid2" style="align-items:stretch">
+        <div class="panel" style="margin-bottom:0">
+          <div class="ph"><h2>Identitas model</h2></div>
+          <div class="pb" id="p3-identity"><div class="loading">memuat...</div></div>
+        </div>
+        <div class="panel" style="margin-bottom:0;display:flex;flex-direction:column">
+          <div class="ph">
+            <h2>Hasil validasi</h2>
+            <span class="hint" id="p3-valhint"></span>
+          </div>
+          <div class="pb" id="p3-validation" style="flex:1"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <div class="ph">
+          <h2>Variabel</h2>
+          <span class="hint" id="p3-varhint"></span>
+        </div>
+        <div class="pb" id="p3-features"></div>
+      </div>
+
+      <div class="panel">
+        <div class="ph"><h2>Batas penggunaan</h2></div>
+        <div class="pb" id="p3-limits"></div>
+      </div>
+    </section>
+  </div>
+</main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
