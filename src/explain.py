@@ -1,0 +1,196 @@
+"""Menilai satu pemohon, lalu menjelaskan kenapa hasilnya begitu.
+
+Di tahap sebelumnya kita menilai ratusan ribu pinjaman sekaligus untuk
+mengukur mutu model. File ini kebalikannya: satu pemohon, dengan
+penjelasan lengkap.
+
+Inilah yang membuat Logistic Regression dipilih. Rumusnya berbentuk
+penjumlahan, jadi pengaruh setiap variabel bisa dipisah dan dihitung
+persis:
+
+    log-odds = intercept
+             + (koefisien_1 x nilai_1)
+             + (koefisien_2 x nilai_2)
+             + ...
+
+Setiap suku dalam penjumlahan itu adalah sumbangan satu variabel
+terhadap risiko. Tinggal diurutkan, dan yang terbesar menjadi alasan
+penolakan.
+
+Hasilnya PASTI dan BISA DILACAK: data yang sama selalu menghasilkan
+alasan yang sama, dan setiap alasan bisa ditunjuk asal angkanya. Model
+seperti Gradient Boosting tidak bisa memberikan ini.
+
+Satu hal penting soal cara membacanya: nilai setiap variabel sudah
+diseragamkan terhadap RATA-RATA PEMOHON di data latih. Jadi sumbangan
+positif berarti "lebih berisiko dibanding pemohon rata-rata", bukan
+"berisiko" secara mutlak.
+"""
+import numpy as np
+import pandas as pd
+
+from src.calibration import apply_offset
+
+
+# ---------------------------------------------------------------------
+# Melengkapi isian
+# ---------------------------------------------------------------------
+def fill_defaults(app: dict, reference: dict, meta: dict) -> dict:
+    """Lengkapi isian yang kosong dengan nilai pemohon rata-rata.
+
+    Formulir di aplikasi hanya menanyakan sebagian variabel -- tidak
+    mungkin meminta pemohon mengisi 19 kolom. Sisanya diisi nilai tengah
+    dari data latih, dan karena nilai tengah berarti "rata-rata", variabel
+    itu tidak akan muncul sebagai alasan penolakan.
+    """
+    lengkap = dict(reference["defaults"])
+    lengkap.update({k: v for k, v in app.items() if v is not None})
+    return {k: lengkap[k] for k in meta["numeric"] + meta["categorical"]}
+
+
+def to_frame(app: dict, meta: dict) -> pd.DataFrame:
+    """Ubah satu pemohon menjadi tabel satu baris, urutan kolom sesuai model."""
+    return pd.DataFrame([app])[meta["numeric"] + meta["categorical"]]
+
+
+# ---------------------------------------------------------------------
+# Menghitung sumbangan tiap variabel
+# ---------------------------------------------------------------------
+def contributions(model, meta: dict, app: dict) -> tuple:
+    """Pecah risiko pemohon menjadi sumbangan per variabel.
+
+    Mengembalikan (pd_mentah, daftar_sumbangan).
+
+    Kolom kategori dipecah model menjadi beberapa kolom 0/1 -- misalnya
+    purpose_small_business. Sumbangannya dikembalikan ke nama aslinya,
+    supaya yang tampil "Tujuan pinjaman", bukan nama teknis.
+    """
+    X = to_frame(app, meta)
+    Z = model[:-1].transform(X)[0]           # nilai setelah diseragamkan
+    nama = list(model[:-1].get_feature_names_out())
+    koef = model[-1].coef_[0]
+    intercept = float(model[-1].intercept_[0])
+
+    kategori = meta["categorical"]
+    kumpul = {}
+    for n, z, c in zip(nama, Z, koef):
+        jenis, _, kolom = n.partition("__")
+        if jenis == "cat":
+            kolom = next((k for k in kategori if kolom.startswith(k + "_")), kolom)
+        kumpul[kolom] = kumpul.get(kolom, 0.0) + float(z * c)
+
+    log_odds = intercept + sum(kumpul.values())
+    pd_mentah = float(1 / (1 + np.exp(-log_odds)))
+
+    daftar = [{"feature": k, "contribution": round(v, 4)} for k, v in kumpul.items()]
+    daftar.sort(key=lambda b: -b["contribution"])
+    return pd_mentah, daftar
+
+
+# ---------------------------------------------------------------------
+# Menjelaskan dalam bahasa manusia
+# ---------------------------------------------------------------------
+def percentile_of(value: float, quantiles: list) -> int:
+    """Posisi sebuah nilai di antara pemohon lain, dalam persen.
+
+    Hasil 80 berarti: nilai pemohon ini lebih tinggi dari 80% pemohon
+    di data latih.
+    """
+    q = np.asarray(quantiles, dtype=float)
+    return int(np.searchsorted(q, float(value), side="right"))
+
+
+def describe(feature: str, value, reference: dict, labels: dict) -> str:
+    """Susun satu kalimat alasan, lengkap dengan pembandingnya."""
+    nama = labels.get("features", {}).get(feature, feature)
+
+    if feature in reference["categorical"]:
+        arti = labels.get("values", {}).get(feature, {}).get(str(value), str(value))
+        porsi = reference["categorical"][feature]["shares"].get(str(value))
+        tambahan = f", {porsi:.0%} pemohon" if porsi else ""
+        return f"{nama}: {arti}{tambahan}"
+
+    p = percentile_of(value, reference["numeric"][feature]["quantiles"])
+    if p >= 90:
+        banding = "tertinggi 10% populasi"
+    elif p >= 75:
+        banding = "kuartil tertinggi populasi"
+    elif p <= 10:
+        banding = "terendah 10% populasi"
+    elif p <= 25:
+        banding = "kuartil terendah populasi"
+    else:
+        banding = f"di atas {p}% pemohon" if p >= 50 else f"di bawah {100 - p}% pemohon"
+    return f"{nama} {banding}"
+
+
+# ---------------------------------------------------------------------
+# Penilaian lengkap
+# ---------------------------------------------------------------------
+def assess(app: dict, model, meta: dict, reference: dict, cutoff: float,
+           labels: dict, top_n: int = 4) -> dict:
+    """Nilai satu pemohon: keputusan, PD, dan alasannya."""
+    lengkap = fill_defaults(app, reference, meta)
+    pd_mentah, sumbangan = contributions(model, meta, lengkap)
+
+    # PD dikoreksi dengan penggeser yang dihitung di p3 dari data validasi
+    pd_akhir = float(apply_offset(pd_mentah, meta.get("calibration_offset", 0.0)))
+    disetujui = pd_akhir < cutoff
+
+    for b in sumbangan:
+        b["value"] = lengkap[b["feature"]]
+        b["label"] = labels.get("features", {}).get(b["feature"], b["feature"])
+        b["reason"] = describe(b["feature"], b["value"], reference, labels)
+
+    # Alasan penolakan: yang sumbangannya paling menaikkan risiko
+    penaik = [b for b in sumbangan if b["contribution"] > 0][:top_n]
+
+    return {
+        "pd": round(pd_akhir, 4),
+        "pd_uncalibrated": round(pd_mentah, 4),
+        "cutoff": cutoff,
+        "approved": bool(disetujui),
+        "decision": "Disetujui" if disetujui else "Ditolak",
+        "reason_codes": [
+            {"code": f"RC{i + 1}", **b} for i, b in enumerate(penaik)
+        ],
+        "contributions": sumbangan,
+        "application": lengkap,
+    }
+
+
+def apply_scenarios(app: dict, model, meta: dict, reference: dict,
+                    cutoff: float, scenarios: list) -> list:
+    """Hitung ulang PD untuk beberapa tawaran alternatif.
+
+    Di bank ini disebut counter-offer: pemohon yang ditolak tidak langsung
+    dilepas, tapi ditawari bentuk lain -- plafon lebih kecil, misalnya.
+    """
+    dasar = fill_defaults(app, reference, meta)
+    hasil = []
+
+    for s in scenarios:
+        ubah = dict(dasar)
+        for kolom, aturan in s["changes"].items():
+            if kolom not in ubah:
+                continue
+            if "multiply" in aturan:
+                ubah[kolom] = float(ubah[kolom]) * aturan["multiply"]
+            if "set_max" in aturan:
+                ubah[kolom] = min(float(ubah[kolom]), aturan["set_max"])
+            if "set" in aturan:
+                ubah[kolom] = aturan["set"]
+
+        p_mentah, _ = contributions(model, meta, ubah)
+        p = float(apply_offset(p_mentah, meta.get("calibration_offset", 0.0)))
+        hasil.append({
+            "name": s["name"],
+            # Kalau tidak ada satu pun variabel yang diubah termasuk fitur
+            # model, skenario ini tidak akan mengubah PD sama sekali.
+            "affects_model": any(k in dasar for k in s["changes"]),
+            "pd": round(p, 4),
+            "approved": bool(p < cutoff),
+            "decision": "Terima" if p < cutoff else "Tolak",
+        })
+
+    return hasil

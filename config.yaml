@@ -305,3 +305,102 @@ policy:
     start: 0.02
     stop: 0.40
     step: 0.01
+
+# ---------------------------------------------------------------------
+# TAMPILAN -- nama variabel dalam bahasa manusia.
+# Dipakai untuk alasan penolakan dan halaman model card. Kalau sebuah
+# variabel tidak ada di sini, nama kolomnya yang dipakai apa adanya.
+# ---------------------------------------------------------------------
+labels:
+  features:
+    loan_amnt: Jumlah pinjaman
+    emp_length: Lama bekerja
+    home_ownership: Status tempat tinggal
+    annual_inc: Penghasilan per tahun
+    verification_status: Verifikasi penghasilan
+    purpose: Tujuan pinjaman
+    dti: Rasio cicilan terhadap penghasilan
+    fico_score: Skor kredit
+    credit_history_years: Lama riwayat kredit
+    delinq_2yrs: Tunggakan 2 tahun terakhir
+    inq_last_6mths: Pengajuan kredit 6 bulan terakhir
+    mths_since_last_delinq: Bulan sejak tunggakan terakhir
+    mths_since_last_record: Bulan sejak catatan publik terakhir
+    open_acc: Rekening kredit aktif
+    pub_rec: Catatan publik negatif
+    revol_bal: Saldo kartu kredit
+    revol_util: Pemakaian limit kartu kredit
+    total_acc: Total rekening kredit
+    mort_acc: Jumlah KPR
+    pub_rec_bankruptcies: Catatan kebangkrutan
+    collections_12_mths_ex_med: Penagihan pihak ketiga 12 bulan
+    acc_now_delinq: Rekening sedang menunggak
+    chargeoff_within_12_mths: Kredit dihapusbukukan 12 bulan terakhir
+    delinq_amnt: Jumlah tunggakan
+    tax_liens: Sitaan pajak
+    tot_cur_bal: Total saldo utang
+    tot_hi_cred_lim: Total limit kredit
+    total_rev_hi_lim: Total limit kartu kredit
+    avg_cur_bal: Rata-rata saldo per rekening
+    bc_open_to_buy: Sisa limit kartu kredit
+    bc_util: Pemakaian limit kartu utama
+    percent_bc_gt_75: Persen kartu terpakai di atas 75%
+    acc_open_past_24mths: Rekening baru 2 tahun terakhir
+    num_tl_op_past_12m: Rekening baru 12 bulan terakhir
+    mths_since_recent_bc: Bulan sejak kartu kredit terakhir dibuka
+    mths_since_recent_inq: Bulan sejak pengajuan kredit terakhir
+    mo_sin_rcnt_tl: Bulan sejak rekening terakhir dibuka
+    mo_sin_rcnt_rev_tl_op: Bulan sejak kartu terakhir dibuka
+    mo_sin_old_il_acct: Umur kredit cicilan tertua
+    mo_sin_old_rev_tl_op: Umur kartu kredit tertua
+    num_actv_rev_tl: Kartu kredit aktif
+    num_rev_tl_bal_gt_0: Kartu kredit bersaldo
+    num_sats: Rekening berstatus lancar
+    num_bc_sats: Kartu kredit berstatus lancar
+    total_bal_ex_mort: Total utang selain KPR
+    total_bc_limit: Total limit kartu kredit
+    total_il_high_credit_limit: Total limit kredit cicilan
+    pct_tl_nvr_dlq: Persen rekening tak pernah menunggak
+    mths_since_last_major_derog: Bulan sejak catatan buruk besar
+    num_accts_ever_120_pd: Rekening pernah menunggak 120 hari
+
+  values:
+    purpose:
+      debt_consolidation: Konsolidasi utang
+      credit_card: Pelunasan kartu kredit
+      home_improvement: Renovasi rumah
+      major_purchase: Pembelian besar
+      small_business: Usaha kecil
+      other: Lainnya
+    home_ownership:
+      MORTGAGE: KPR berjalan
+      RENT: Sewa
+      OWN: Milik sendiri
+      OTHER: Lainnya
+    verification_status:
+      Verified: Terverifikasi
+      "Source Verified": Terverifikasi dari sumber
+      "Not Verified": Tidak diverifikasi
+
+# ---------------------------------------------------------------------
+# SKENARIO ALTERNATIF -- tawaran yang bisa diajukan ke pemohon yang
+# ditolak, lalu dihitung ulang PD-nya. Ini yang di bank disebut
+# counter-offer: bukan sekadar menolak, tapi menawarkan bentuk lain.
+# ---------------------------------------------------------------------
+scenarios:
+  # PENTING: skenario hanya berpengaruh kalau variabel yang diubah termasuk
+  # fitur model. Jumlah pinjaman (loan_amnt) misalnya tidak lolos penyaringan
+  # IV -- artinya di data ini, BESAR pinjaman tidak memprediksi gagal bayar,
+  # yang memprediksi adalah profil pemohonnya. Jadi menurunkan plafon tidak
+  # mengubah PD sama sekali, dan tidak layak ditawarkan sebagai jalan keluar.
+  # p5_export.py memberi peringatan kalau ada skenario yang tidak berpengaruh.
+  - name: Rasio cicilan turun ke 25%
+    changes:
+      dti: {set_max: 25}
+  - name: Pemakaian kartu turun ke 30%
+    changes:
+      revol_util: {set_max: 30}
+  - name: Keduanya
+    changes:
+      dti: {set_max: 25}
+      revol_util: {set_max: 30}
