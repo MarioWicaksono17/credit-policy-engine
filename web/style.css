@@ -102,7 +102,7 @@ tr:last-child td{border-bottom:none}
 
 /* ---- slider ---- */
 .ctrl{display:flex;align-items:center;gap:24px}
-.ctrl .lb{font-size:12.5px;color:var(--ink-2);width:78px;flex:0 0 78px}
+.ctrl .lb{font-size:12.5px;color:var(--ink-2);width:96px;flex:0 0 96px}
 .ctrl input[type=range]{flex:1;accent-color:var(--blue);height:4px}
 .ctrl .out{font-size:24px;font-weight:600;width:78px;text-align:right;letter-spacing:-.02em;
   font-variant-numeric:tabular-nums;color:var(--navy)}
@@ -179,6 +179,10 @@ tr:last-child td{border-bottom:none}
   line-height:1;user-select:none;flex:0 0 13px}
 .tt:hover,.tt:focus{background:var(--navy);color:#fff;outline:none}
 .tip{position:absolute;top:calc(100% + 7px);left:-11px;width:250px;background:var(--navy);
+  /* Label dibungkus .nw agar ikonnya tidak turun baris. Aturan itu ikut
+     terbawa ke isi kotak ini, jadi teksnya dipaksa satu baris panjang dan
+     keluar dari kotak. Di sini dikembalikan supaya boleh turun baris. */
+  white-space:normal;
   color:#dce4ee;font-family:var(--sans);font-size:11.5px;font-weight:400;line-height:1.5;
   padding:10px 13px;border-radius:4px;text-align:left;opacity:0;visibility:hidden;
   transition:opacity .12s;z-index:60;pointer-events:none;letter-spacing:0;text-transform:none;
@@ -217,5 +221,7 @@ tr:last-child td{border-bottom:none}
 
 /* ---- keadaan sebelum ada hasil ---- */
 .strip.kosong .v{color:#5c6e85}
-.p2note{font-size:11.5px;color:var(--ink-2);margin:10px 0 0;line-height:1.5}
-.p2note b{color:var(--ink);font-weight:600}
+/* ---- label yang tidak boleh terpisah dari ikon penjelasannya ----
+   Tanpa ini, kata panjang seperti "Diskriminasi" bisa mendorong ikon "!"
+   turun ke baris berikutnya saat kolomnya sempit. */
+.nw{display:inline-flex;align-items:center;white-space:nowrap}

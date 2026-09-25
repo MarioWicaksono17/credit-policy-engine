@@ -76,7 +76,7 @@ def card():
             "product": f"Pinjaman konsumen tanpa agunan, tenor "
                        f"{cfg['filters']['term_months']} bulan",
             "default_definition": "Charged off, sekitar 120 hari menunggak",
-            "horizon": "Seumur pinjaman",
+            "horizon": "Sepanjang umur pinjaman",
             "train_years": cfg["split"]["train_years"],
             "validation_years": cfg["split"]["validation_years"],
             "test_years": cfg["split"]["test_years"],
@@ -116,28 +116,28 @@ def card():
             "dropped": dibuang,
             "excluded_by_design": {
                 "pricing": cfg["columns"]["benchmark"],
-                "reason": "Penilaian risiko originator, bukan karakteristik pemohon, "
-                          "dan belum ada saat keputusan kredit diambil",
+                "reason": "Hasil penilaian risiko pemberi pinjaman, bukan ciri pemohon, "
+                          "dan belum tersedia saat keputusan kredit diambil",
             },
         },
         "limitations": {
             "can_be_used_for": [
                 "Mengurutkan pemohon dari yang paling aman",
                 "Keputusan terima-tolak",
-                "Memberi alasan penolakan",
-                "Simulasi kebijakan kredit",
+                "Menyusun alasan penolakan untuk pemohon",
+                "Menyimulasikan dampak perubahan batas PD",
             ],
             "cannot_be_used_for": [
                 "Menghitung cadangan kerugian tanpa koreksi dan margin kehati-hatian",
-                f"Pinjaman selain tenor {cfg['filters']['term_months']} bulan",
-                "Pengajuan bersama",
-                "Produk kredit lain seperti KPR atau kartu kredit",
+                f"Pinjaman dengan tenor selain {cfg['filters']['term_months']} bulan",
+                "Pengajuan bersama atau atas nama dua orang",
+                "Produk kredit lain, misalnya KPR atau kartu kredit",
             ],
             "data_limitations": [
-                "Hanya berisi pemohon yang disetujui, tidak ada data yang ditolak",
-                "Tidak ada variabel kondisi ekonomi",
-                "Definisi gagal bayar seumur pinjaman, bukan 12 bulan seperti Basel",
-                "Data Amerika 2013-2015, tidak mewakili pemohon Indonesia",
+                "Hanya memuat pemohon yang disetujui; yang ditolak tidak tercatat",
+                "Tidak memuat variabel kondisi ekonomi, misalnya tingkat pengangguran",
+                "Gagal bayar dihitung sepanjang umur pinjaman, bukan 12 bulan seperti aturan Basel",
+                "Bersumber dari data Amerika Serikat 2013-2015, tidak mewakili pemohon di Indonesia",
             ],
             "policy_review_needed": not a.policy["holds_on_test"],
         },

@@ -7,7 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<!-- Angka di belakang ?v= adalah penanda versi. Browser menyimpan
+     berkas ini supaya halaman cepat dibuka, dan kadang tetap memakai
+     simpanan lama walaupun berkasnya sudah diganti. Menaikkan angka
+     ini memaksa browser mengambil yang baru. -->
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
@@ -23,14 +27,14 @@
 <aside class="side">
   <div class="brand">
     <div class="n">Credit Policy Engine</div>
-    <div class="d" id="brand-sub">memuat...</div>
+    <div class="d" id="brand-sub">Memuat&hellip;</div>
   </div>
   <nav class="nav">
     <button class="on" data-p="p1"><span class="ix">01</span>Penilaian aplikasi</button>
     <button data-p="p2"><span class="ix">02</span>Kebijakan kredit</button>
     <button data-p="p3"><span class="ix">03</span>Model card</button>
   </nav>
-  <div class="sfoot" id="side-foot">memuat...</div>
+  <div class="sfoot" id="side-foot">Memuat&hellip;</div>
 </aside>
 
 <main class="main">
@@ -50,7 +54,7 @@
         <div class="panel formcol">
           <div class="ph"><h2>Data pemohon</h2></div>
           <div class="pb">
-            <div id="p1-form"><div class="loading">memuat formulir...</div></div>
+            <div id="p1-form"><div class="loading">Memuat formulir&hellip;</div></div>
             <button class="go" id="p1-go" disabled>Nilai aplikasi</button>
           </div>
         </div>
@@ -59,10 +63,10 @@
           <div class="panel">
             <div class="ph">
               <h2>Faktor penentu</h2>
-              <span class="hint">kontribusi log-odds</span>
+              <span class="hint">pengaruh tiap faktor</span>
             </div>
             <div class="pb tight" id="p1-factors">
-              <div class="loading">isi formulir, lalu klik Nilai aplikasi</div>
+              <div class="loading">Isi formulir di sebelah kiri, lalu klik Nilai aplikasi.</div>
             </div>
           </div>
 
@@ -72,7 +76,7 @@
               <span class="hint">counter-offer</span>
             </div>
             <div class="pb tight" id="p1-scenarios">
-              <div class="loading">belum ada</div>
+              <div class="loading">Belum ada hasil.</div>
             </div>
           </div>
         </div>
@@ -84,11 +88,11 @@
       <div class="panel">
         <div class="pb">
           <div class="ctrl">
-            <div class="lb">Batas PD</div>
+            <div class="lb">Batas PD<span class="tt" tabindex="0">!<span
+              class="tip" id="p2-tip"></span></span></div>
             <input type="range" id="p2-slider" min="0" max="0" value="0" step="1" disabled>
             <div class="out" id="p2-out">--</div>
           </div>
-          <p class="p2note" id="p2-note"></p>
         </div>
       </div>
 
@@ -97,7 +101,7 @@
           <h2>Distribusi hasil</h2>
           <span class="hint" id="p2-hint"></span>
         </div>
-        <div class="pb" id="p2-dist"><div class="loading">memuat...</div></div>
+        <div class="pb" id="p2-dist"><div class="loading">Memuat&hellip;</div></div>
       </div>
 
       <div class="panel">
@@ -116,7 +120,7 @@
       <div class="grid2" style="align-items:stretch">
         <div class="panel" style="margin-bottom:0">
           <div class="ph"><h2>Identitas model</h2></div>
-          <div class="pb" id="p3-identity"><div class="loading">memuat...</div></div>
+          <div class="pb" id="p3-identity"><div class="loading">Memuat&hellip;</div></div>
         </div>
         <div class="panel" style="margin-bottom:0;display:flex;flex-direction:column">
           <div class="ph">
@@ -144,6 +148,6 @@
 </main>
 </div>
 
-<script src="app.js"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

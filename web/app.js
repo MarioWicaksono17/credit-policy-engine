@@ -55,7 +55,8 @@ async function api(path, body) {
 
 function tampilkanError(e) {
   el('err-box').innerHTML =
-    `<div class="err"><b>Gagal memuat.</b> ${escapeHtml(e.message)}</div>`;
+    `<div class="err"><b>Gagal memuat.</b> ${escapeHtml(e.message)}<br>
+     Kalau berkas halaman baru saja diganti, tekan Ctrl+F5 untuk memuat ulang.</div>`;
 }
 
 /* ================= 3. Halaman 1: Penilaian aplikasi ================= */
@@ -96,9 +97,9 @@ function gambarStripKosong() {
   el('p1-strip').innerHTML = `
     <div class="strip kosong">
       <div class="c"><div class="k">Keputusan</div>
-        <div class="v">&mdash;</div><div class="s">belum dinilai</div></div>
+        <div class="v">&mdash;</div><div class="s">Belum dinilai</div></div>
       <div class="c"><div class="k">Probability of default</div>
-        <div class="v">&mdash;</div><div class="s">isi formulir, lalu klik Nilai aplikasi</div></div>
+        <div class="v">&mdash;</div><div class="s">Isi formulir, lalu klik Nilai aplikasi</div></div>
     </div>`;
 }
 
@@ -140,7 +141,7 @@ function gambarHasil(r) {
       <div class="c">
         <div class="k">Probability of default</div>
         <div class="v">${persen(r.pd)}</div>
-        <div class="s">sebelum koreksi kalibrasi ${persen(r.pd_uncalibrated)}</div>
+        <div class="s">Sebelum koreksi kalibrasi: ${persen(r.pd_uncalibrated)}</div>
       </div>
     </div>`;
 
@@ -177,16 +178,18 @@ function gambarHasil(r) {
   el('p1-factors').innerHTML = `
     <table><thead><tr>
       <th>Kode</th><th>Faktor</th><th class="num">Nilai</th>
-      <th></th><th class="num">Kontribusi</th>
+      <th></th><th class="num">Pengaruh</th>
     </tr></thead><tbody>${baris}</tbody></table>
     <p class="fn">${r.reason_codes.length
-      ? `RC1&ndash;RC${r.reason_codes.length} adalah alasan penolakan yang
-         disampaikan ke pemohon.`
-      : `Pemohon disetujui, jadi tidak ada alasan penolakan. Tabel ini rincian
-         perhitungan PD.`}
-    Nilai positif menaikkan risiko dibanding pemohon rata-rata.${sisa.length
-      ? ` Menampilkan ${BATAS} faktor terbesar dari ${urut.length};
-         ${sisa.length} sisanya berjumlah ${sisaTotal >= 0 ? '+' : ''}${angka(sisaTotal, 2)}.`
+      ? `Kode RC1&ndash;RC${r.reason_codes.length} adalah alasan penolakan yang
+         disampaikan kepada pemohon.`
+      : `Pemohon disetujui, sehingga tidak ada alasan penolakan. Tabel ini
+         memperlihatkan rincian perhitungan PD.`}
+    Nilai positif berarti faktor tersebut menaikkan risiko dibandingkan pemohon
+    rata-rata.${sisa.length
+      ? ` Ditampilkan ${BATAS} faktor dengan pengaruh terbesar dari ${urut.length};
+         gabungan ${sisa.length} faktor lainnya sebesar
+         ${sisaTotal >= 0 ? '+' : ''}${angka(sisaTotal, 2)}.`
       : ''}</p>`;
 
   // --- skenario alternatif
@@ -226,10 +229,13 @@ async function muatKebijakan() {
   el('p2-vs').textContent = `vs batas berlaku ${persen(sweep.chosen_cutoff, 0)}`;
 
   s.oninput = () => gambarKebijakan(rows[Number(s.value)]);
-  el('p2-note').innerHTML =
-    `<b>Batas PD</b> adalah ambang untuk satu pemohon: di atas angka ini, ditolak. ` +
-    `<b>Batas risiko</b> menilai hasilnya: dari seluruh yang disetujui, maksimal ` +
-    `${persen(sweep.risk_appetite, 0)} boleh gagal bayar. Keduanya angka yang berbeda.`;
+  // Penjelasan dipindahkan ke ikon di samping label, supaya tidak memakan
+  // ruang tinggi halaman yang sudah sempit.
+  el('p2-tip').innerHTML =
+    `Ambang untuk satu pemohon: jika PD-nya di atas angka ini, pengajuannya ` +
+    `ditolak. Berbeda dengan <b>batas risiko</b>, yang menilai hasil keseluruhan: ` +
+    `dari seluruh pemohon yang disetujui, paling banyak ` +
+    `${persen(sweep.risk_appetite, 0)} boleh gagal bayar.`;
   gambarKebijakan(rows[Number(s.value)]);
 }
 
@@ -254,7 +260,7 @@ function gambarKebijakan(r) {
   const legenda = [
     ['k1', 'Disetujui,<br>membayar lunas', r.approved_good],
     ['k2', 'Disetujui,<br>gagal bayar', r.approved_bad],
-    ['k3', 'Ditolak,<br>sebenarnya akan lunas', r.rejected_good],
+    ['k3', 'Ditolak,<br>padahal akan lunas', r.rejected_good],
     ['k4', 'Ditolak,<br>memang gagal bayar', r.rejected_bad],
   ].map(([c, t, n]) =>
     `<div class="k ${c}"><div class="t">${t}</div><div class="n">${angka(n)}</div></div>`).join('');
@@ -279,7 +285,7 @@ function gambarKebijakan(r) {
       juta(r.realized_loss - dasar.realized_loss)],
     ['Kontribusi kredit', juta(dasar.contribution), juta(r.contribution),
       juta(r.contribution - dasar.contribution)],
-    ['Ditolak, akan lunas', angka(dasar.rejected_good), angka(r.rejected_good),
+    ['Ditolak, padahal akan lunas', angka(dasar.rejected_good), angka(r.rejected_good),
       angka(r.rejected_good - dasar.rejected_good)],
   ].map(([nama, a, b, d]) => `
     <tr><td>${nama}</td>
@@ -308,20 +314,22 @@ function gambarKebijakan(r) {
     jenis = 'bad';
     const terlonggar = aman.length ? Math.max(...aman.map((x) => x.cutoff)) : null;
     teks = `<b>Melewati batas risiko.</b> Dengan batas PD ${persen(r.cutoff, 0)},
-      ${angka(r.n_approved)} pemohon disetujui dan ${persen(r.default_rate)} di antaranya
-      gagal bayar &mdash; di atas batas ${persen(batas, 0)}.
+      sebanyak ${angka(r.n_approved)} pemohon disetujui dan ${persen(r.default_rate)}
+      di antaranya gagal bayar &mdash; lebih tinggi daripada batas ${persen(batas, 0)}.
       ${terlonggar !== null ? `Batas PD paling longgar yang masih memenuhi batas risiko
       adalah ${persen(terlonggar, 0)}.` : ''}`;
   } else if (r.contribution >= puncak * 0.85) {
     jenis = 'ok';
     teks = `<b>Titik yang baik.</b> Dengan batas PD ${persen(r.cutoff, 0)},
-      default rate ${persen(r.default_rate)} masih di bawah batas ${persen(batas, 0)},
-      dan kontribusinya mendekati yang tertinggi di antara garis batas yang aman.`;
+      ${persen(r.default_rate)} pemohon yang disetujui gagal bayar &mdash; masih di
+      bawah batas ${persen(batas, 0)} &mdash; dan kontribusinya mendekati yang tertinggi
+      di antara batas PD yang aman.`;
   } else {
     jenis = 'warn';
     teks = `<b>Terlalu ketat.</b> Dengan batas PD ${persen(r.cutoff, 0)},
-      default rate ${persen(r.default_rate)} jauh di bawah batas ${persen(batas, 0)},
-      tapi ${angka(r.rejected_good)} pemohon yang akan membayar lunas ikut ditolak.`;
+      hanya ${persen(r.default_rate)} pemohon yang disetujui gagal bayar &mdash; jauh
+      di bawah batas ${persen(batas, 0)} &mdash; tetapi ${angka(r.rejected_good)} pemohon
+      yang sebenarnya akan membayar lunas ikut ditolak.`;
   }
 
   el('p2-verdict').innerHTML = `<div class="callout ${jenis}">${teks}</div>`;
@@ -335,14 +343,18 @@ async function muatModelCard() {
 
   // --- identitas
   el('p3-identity').innerHTML = [
-    ['Jenis', id.type],
-    ['Algoritma', id.algorithm.replace(/_/g, ' ')],
+    ['Jenis model', id.type],
+    ['Metode', 'Logistic Regression'],
     ['Produk', id.product],
-    ['Definisi default', id.default_definition],
-    ['Horizon', id.horizon],
-    ['Pelatihan', `Vintage ${id.train_years.join(', ')} (${angka(id.n_train)} pinjaman)`],
-    ['Validasi', `Out-of-time ${id.validation_years.join(', ')}`],
-    ['Pengujian', `Out-of-time ${id.test_years.join(', ')}`],
+    ['Definisi gagal bayar', id.default_definition],
+    ['Jangka penilaian', id.horizon],
+    // Tanda pisah ditulis sebagai karakter langsung, bukan sebagai kode HTML.
+    // Nilai di baris-baris ini diamankan dulu sebelum ditampilkan, dan
+    // pengamanan itu memperlakukan kode HTML sebagai tulisan biasa -- jadi
+    // kodenya akan tampil apa adanya, bukan berubah jadi tanda pisah.
+    ['Data pelatihan', `${id.train_years.join(', ')} — ${angka(id.n_train)} pinjaman`],
+    ['Data validasi', `${id.validation_years.join(', ')} — memilih model dan batas PD`],
+    ['Data pengujian', `${id.test_years.join(', ')} — dinilai sekali di akhir`],
   ].map(([k, val]) =>
     `<div class="idr"><span>${k}</span><b>${escapeHtml(String(val))}</b></div>`).join('');
 
@@ -355,38 +367,42 @@ async function muatModelCard() {
   el('p3-validation').innerHTML = `
     <table><tbody>
       <tr>
-        <td style="width:96px">Diskriminasi
-          <span class="tt" tabindex="0">!<span class="tip">Kemampuan model
-          membedakan yang akan gagal bayar dari yang akan lunas -- apakah
-          urutan risikonya benar. Cukup untuk keputusan terima-tolak.</span></span></td>
+        <td style="width:120px"><span class="nw">Diskriminasi<span
+          class="tt" tabindex="0">!<span class="tip">Kemampuan model membedakan yang
+          akan gagal bayar dari yang akan lunas &mdash; apakah urutan risikonya benar.
+          Cukup untuk keputusan terima-tolak.</span></span></span></td>
         <td>Dari 100 pasang pinjaman, model menempatkan yang gagal bayar lebih
           berisiko pada <b>${auc}</b> pasang.</td>
         <td class="num" style="width:104px"><span class="tag t-ok">memadai</span></td>
       </tr>
       <tr>
-        <td>Kalibrasi
-          <span class="tt" tabindex="0">!<span class="tip r">Apakah angka PD-nya
-          sesuai kenyataan. Dibutuhkan ketika PD dikalikan dengan uang, misalnya
-          untuk menghitung cadangan kerugian.</span></span></td>
-        <td>Dari 1.000 pinjaman, model memperkirakan <b>${perkiraan}</b> gagal bayar;
-          realisasinya <b>${kenyataan}</b>.</td>
+        <td><span class="nw">Kalibrasi<span class="tt" tabindex="0">!<span
+          class="tip">Apakah angka PD-nya sesuai kenyataan. Dibutuhkan ketika PD
+          dikalikan dengan uang, misalnya untuk menghitung cadangan
+          kerugian.</span></span></span></td>
+        <td>Dari 1.000 pinjaman, model memperkirakan <b>${perkiraan}</b> akan gagal
+          bayar; kenyataannya <b>${kenyataan}</b>.</td>
         <td class="num"><span class="tag ${tagKal}">${poin(v.calibration.gap_pp_after)}</span></td>
       </tr>
       <tr>
-        <td>Koreksi</td>
-        <td>Seluruh PD digeser <b>${angka(v.calibration.offset, 4)}</b> pada skala
-          log-odds, dihitung dari data validasi. Selisih membaik dari
-          ${poin(v.calibration.gap_pp_before)} menjadi ${poin(v.calibration.gap_pp_after)},
-          dan AUC tidak berubah sama sekali.</td>
-        <td class="num"><span class="tag t-ok">urutan utuh</span></td>
+        <td><span class="nw">Koreksi<span class="tt" tabindex="0">!<span
+          class="tip">Model selalu memperkirakan terlalu rendah, dan melesetnya searah
+          di semua tingkat risiko. Itu berarti levelnya yang bergeser, bukan urutannya
+          yang salah &mdash; sehingga bisa diperbaiki dengan menggeser seluruh angka PD
+          sebesar satu angka yang sama.</span></span></span></td>
+        <td>Seluruh angka PD digeser dengan satu angka yang sama, dihitung dari data
+          validasi. Selisihnya membaik dari ${poin(v.calibration.gap_pp_before)} menjadi
+          ${poin(v.calibration.gap_pp_after)}, sementara urutan risikonya tidak berubah
+          sama sekali.</td>
+        <td class="num"><span class="tag t-ok">urutan tetap</span></td>
       </tr>
     </tbody></table>
-    <p class="fn">Pembagian acak menghasilkan selisih
-      ${v.random_split_benchmark ? poin(v.random_split_benchmark.calibration_gap_pp) : '-'},
-      jauh lebih kecil. Angka itu menyesatkan karena data latih dan data uji berasal
-      dari periode yang sama.</p>`;
+    <p class="fn">Bila diuji dengan pembagian acak, selisihnya hanya
+      ${v.random_split_benchmark ? poin(v.random_split_benchmark.calibration_gap_pp) : '-'}.
+      Angka itu menyesatkan, karena data latih dan data uji berasal dari periode yang
+      sama sehingga perubahan antarwaktu tidak terlihat.</p>`;
 
-  el('p3-valhint').textContent = `holdout ${id.test_years.join(', ')}`;
+  el('p3-valhint').textContent = `Data pengujian ${id.test_years.join(', ')}`;
 
   // --- variabel: yang dipakai dan yang dibuang
   const maks = Math.max(...m.features.used.slice(0, 10).map((b) => Math.abs(b.coef)));
@@ -418,13 +434,15 @@ async function muatModelCard() {
     <div class="grid2" style="align-items:start">
       <div>
         <table><thead><tr>
-          <th>Digunakan</th><th class="num">Arah</th><th>Kekuatan</th><th class="num">Koef.</th>
+          <th>Variabel yang dipakai</th><th class="num">Arah</th>
+          <th>Kekuatan</th><th class="num">Koefisien</th>
         </tr></thead><tbody>${dipakai}</tbody></table>
         ${semuaVar.length > BATAS_VAR
-          ? `<p class="fn">Menampilkan ${BATAS_VAR} baris teratas dari
-             ${semuaVar.length}, diurutkan menurut Information Value. Kolom kategori
-             dipecah menjadi satu baris per nilai, jadi jumlah barisnya lebih banyak
-             dari jumlah variabel.</p>` : ''}
+          ? `<p class="fn">Ditampilkan ${BATAS_VAR} baris teratas dari
+             ${semuaVar.length}, diurutkan menurut Information Value &mdash; ukuran
+             seberapa kuat sebuah variabel membedakan pemohon yang lunas dan yang gagal
+             bayar. Variabel kategori dipecah menjadi satu baris untuk setiap pilihan,
+             sehingga barisnya lebih banyak daripada jumlah variabel.</p>` : ''}
       </div>
       <div>
         <div class="exc">
@@ -445,14 +463,15 @@ async function muatModelCard() {
       isi.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul></div>`;
 
   el('p3-limits').innerHTML = `<div class="grid3">
-    ${kolom('y', 'Dapat dipakai', m.limitations.can_be_used_for)}
-    ${kolom('n', 'Tidak dapat dipakai', m.limitations.cannot_be_used_for)}
+    ${kolom('y', 'Boleh dipakai untuk', m.limitations.can_be_used_for)}
+    ${kolom('n', 'Tidak boleh dipakai untuk', m.limitations.cannot_be_used_for)}
     ${kolom('l', 'Keterbatasan data', m.limitations.data_limitations)}
   </div>
   ${m.limitations.policy_review_needed ? `<div class="callout warn" style="margin-top:14px">
-    <b>Kebijakan perlu ditinjau.</b> Garis batas yang dipilih dengan data validasi
-    tidak lagi memenuhi batas risiko pada data uji. Penyebabnya bukan model yang
-    rusak -- urutan risikonya masih baik -- melainkan kualitas pemohon yang menurun.
+    <b>Kebijakan perlu ditinjau.</b> Batas PD yang dipilih menggunakan data validasi
+    ternyata tidak lagi memenuhi batas risiko ketika diterapkan pada data pengujian.
+    Penyebabnya bukan model yang rusak &mdash; urutan risikonya masih baik &mdash;
+    melainkan kualitas pemohon yang menurun dari tahun ke tahun.
   </div>` : ''}`;
 }
 
@@ -482,14 +501,27 @@ async function mulai() {
     const card = await api('/api/model/card');
     const id = card.identity;
     el('brand-sub').innerHTML =
-      `${angka(id.n_train)} pinjaman latih<br>tenor 36 bulan`;
+      `${angka(id.n_train)} pinjaman untuk pelatihan<br>Tenor 36 bulan`;
     el('side-foot').innerHTML =
-      `Model ${id.version} &middot; ${id.algorithm.replace(/_/g, ' ')}<br>` +
-      `Latih ${id.train_years.join(',')} &middot; Uji ${id.test_years.join(',')}`;
+      `Model ${id.version} &middot; Logistic Regression<br>` +
+      `Data latih ${id.train_years.join(',')} &middot; Data uji ${id.test_years.join(',')}`;
     el('page-meta').textContent = `model ${id.version}`;
 
-    // Ketiga halaman dimuat sekaligus supaya perpindahan halaman seketika
-    await Promise.all([muatForm(), muatKebijakan(), muatModelCard()]);
+    // Ketiga halaman dimuat sekaligus supaya perpindahan halaman seketika.
+    // Masing-masing ditangani sendiri: kalau satu halaman gagal, dua
+    // halaman lainnya tetap bisa dipakai, dan pesan errornya menyebut
+    // halaman mana yang bermasalah.
+    const hasil = await Promise.allSettled([muatForm(), muatKebijakan(), muatModelCard()]);
+    const nama = ['Penilaian aplikasi', 'Kebijakan kredit', 'Model card'];
+    const gagal = hasil
+      .map((h, i) => (h.status === 'rejected' ? `${nama[i]}: ${h.reason.message}` : null))
+      .filter(Boolean);
+    if (gagal.length) {
+      el('err-box').innerHTML =
+        `<div class="err"><b>Sebagian halaman gagal dimuat.</b>
+         ${escapeHtml(gagal.join(' | '))}<br>
+         Coba tekan Ctrl+F5 untuk memuat ulang berkas halaman.</div>`;
+    }
   } catch (e) {
     tampilkanError(e);
   }
